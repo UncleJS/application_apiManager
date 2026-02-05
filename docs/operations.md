@@ -130,5 +130,11 @@ All report endpoints accept optional `from` and `to` query params (ISO date or d
 - If omitted, the current week or month is used.
 - The UI date picker fills `YYYY-MM-DD` and the text input keeps that format.
 
+## Access windows schema note
+`access_windows` table in the DB does not have foreign keys because it is a polymorphic table:
+- `subject_type` is `user` or `api`
+- `subject_id` points to either `users.id` or `api_definitions.id`
+MariaDB cannot enforce a single FK across multiple tables, so validation is handled in the app.
+
 ## TLS
 - TLS cert/key are generated on first backend start and stored in the `api-manager-tls` volume.
