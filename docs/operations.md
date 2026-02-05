@@ -9,15 +9,22 @@
 3. After code changes, use:
    - `scripts/rebuild.sh`
 3. Open the UI:
-   - Frontend: `https://localhost:55000`
-   - Backend (API + proxy): `https://localhost:55001`
-   - phpMyAdmin: `http://localhost:55002`
+    - Frontend: `https://localhost:55000`
+    - Backend (API + proxy): `https://localhost:55001`
+    - phpMyAdmin: `https://localhost:55002`
 
 Notes:
 - The backend uses a self-signed cert; your browser will show a warning.
 - Visit `https://localhost:55001` once and accept the cert so the frontend can call the API.
 - `https://localhost:55001/healthz` returns a simple health response.
+- phpMyAdmin is served over HTTPS via an internal proxy and uses a self-signed cert.
 - MariaDB has no host port; it is only reachable inside the pod.
+
+## Health checks
+Container healthchecks are configured in `infra/podman-compose.yml` for:
+- MariaDB (ping)
+- Backend (HTTPS /healthz)
+- Frontend (HTTP root)
 
 ## Seed data (dev/test)
 Enable dev/test seed data on startup:
@@ -31,6 +38,11 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 ## Default admin (dev/test)
 - Username: `global-admin`
 - Password: `001002..Ad`
+
+## phpMyAdmin login
+- URL: `https://localhost:55002`
+- Login is required (no auto-login).
+- Use the MariaDB credentials from `.env` (MARIADB_USER / MARIADB_PASSWORD).
 
 ## Rebuild / remove
 ### build.sh vs rebuild.sh
@@ -48,6 +60,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## Environment variables
 Create a `.env` file at repo root (see `.env.example`).
+Scripts load `.env` automatically, even when run from `scripts/`.
 
 Backend (set in `infra/podman-compose.yml`):
 - `PORT` (default 55001)
@@ -64,6 +77,8 @@ Backend (set in `infra/podman-compose.yml`):
 - `SEED_DATA` (default false)
 - `SEED_ACCESS_LOGS` (default false)
 - `CORS_ORIGIN` (default http://localhost:55000)
+- `DB_WAIT_RETRIES` (default 60)
+- `DB_WAIT_DELAY_MS` (default 2000)
 
 Setup script:
 - `DB_ROOT_PASSWORD` (default root_password)

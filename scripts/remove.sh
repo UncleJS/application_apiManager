@@ -4,6 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/podman-compose.yml"
 POD_NAME="api-manager-pod"
+ENV_FILE="$ROOT_DIR/.env"
+ENV_ARGS=()
+
+if [ -f "$ENV_FILE" ]; then
+  ENV_ARGS=(--env-file "$ENV_FILE")
+fi
 
 if ! command -v podman-compose >/dev/null 2>&1; then
   echo "podman-compose not found" >&2
@@ -15,7 +21,7 @@ if [ "${1:-}" = "--purge" ]; then
   PURGE="true"
 fi
 
-podman-compose -f "$COMPOSE_FILE" down
+podman-compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" down
 
 podman pod rm -f "$POD_NAME" || true
 
@@ -25,9 +31,13 @@ if [ "$PURGE" = "true" ]; then
     api-manager-db-data \
     api-manager-tls \
     api-manager-jwt \
+    api-manager-phpmyadmin-data \
+    api-manager-phpmyadmin-config \
     infra_api-manager-db-data \
     infra_api-manager-tls \
-    infra_api-manager-jwt; do
+    infra_api-manager-jwt \
+    infra_api-manager-phpmyadmin-data \
+    infra_api-manager-phpmyadmin-config; do
     if ! podman volume exists "$volume"; then
       continue
     fi

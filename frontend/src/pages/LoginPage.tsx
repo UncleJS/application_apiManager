@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { login } from "../api";
 
 type Props = {
@@ -9,6 +10,7 @@ export default function LoginPage({ onLogin }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -16,6 +18,7 @@ export default function LoginPage({ onLogin }: Props) {
     try {
       await login(username, password);
       onLogin();
+      navigate("/apis");
     } catch (err: any) {
       const message = err?.message ?? "Login failed";
       if (message.includes("Failed to fetch")) {

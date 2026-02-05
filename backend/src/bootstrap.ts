@@ -32,12 +32,14 @@ export async function ensureGlobalOrg(): Promise<number> {
   return rows[0].id;
 }
 
-async function waitForDb(retries = 20, delayMs = 1500): Promise<void> {
+async function waitForDb(): Promise<void> {
+  const retries = Number.parseInt(process.env.DB_WAIT_RETRIES ?? "60", 10);
+  const delayMs = Number.parseInt(process.env.DB_WAIT_DELAY_MS ?? "2000", 10);
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
       await query("SELECT 1");
       return;
-    } catch {
+    } catch (error) {
       if (attempt === retries) {
         throw new Error("Database not ready after retries");
       }

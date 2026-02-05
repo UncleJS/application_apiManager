@@ -113,6 +113,10 @@ a {
   color: var(--muted);
 }
 
+.user-info {
+  margin: 8px 0 24px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

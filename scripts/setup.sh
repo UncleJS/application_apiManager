@@ -6,6 +6,12 @@ COMPOSE_FILE="$ROOT_DIR/infra/podman-compose.yml"
 POD_NAME="api-manager-pod"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-root_password}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
+ENV_FILE="$ROOT_DIR/.env"
+ENV_ARGS=()
+
+if [ -f "$ENV_FILE" ]; then
+  ENV_ARGS=(--env-file "$ENV_FILE")
+fi
 
 if ! command -v podman-compose >/dev/null 2>&1; then
   echo "podman-compose not found" >&2
@@ -29,7 +35,7 @@ if [ "$(podman pod inspect "$POD_NAME" --format '{{.State}}')" != "Running" ]; t
   podman pod start "$POD_NAME"
 fi
 
-podman-compose -f "$COMPOSE_FILE" up -d
+podman-compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" up -d
 
 echo "Waiting for database to be ready"
 db_ready="false"

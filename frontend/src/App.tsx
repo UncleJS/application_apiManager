@@ -47,7 +47,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">API Manager</div>
-        {displayName && <div className="muted">Signed in as {displayName}</div>}
+        {displayName && <div className="muted user-info">Signed in as {displayName}</div>}
         <nav className="nav">
           {identity.role === "global_admin" && <NavLink to="/orgs">Organizations</NavLink>}
           <NavLink to="/users">Users</NavLink>

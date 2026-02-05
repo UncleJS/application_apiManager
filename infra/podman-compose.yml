@@ -13,6 +13,11 @@ services:
     volumes:
       - api-manager-db-data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p$MARIADB_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped
 
   backend:
@@ -42,6 +47,15 @@ services:
       - mariadb
     ports:
       - "55001:55001"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('https').get('https://127.0.0.1:55001/healthz',{rejectUnauthorized:false},res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped
 
   frontend:
@@ -52,6 +66,12 @@ services:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
       - "55000:55000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:55000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+      ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       - backend
     restart: unless-stopped
@@ -63,15 +83,28 @@ services:
     environment:
       PMA_HOST: mariadb
       PMA_PORT: 3306
-      PMA_USER: ${MARIADB_USER}
-      PMA_PASSWORD: ${MARIADB_PASSWORD}
-    ports:
-      - "55002:80"
+      PMA_AUTH_TYPE: cookie
     depends_on:
       - mariadb
+    restart: unless-stopped
+
+  phpmyadmin-https:
+    image: caddy:2
+    pod: api-manager-pod
+    container_name: api-manager-phpmyadmin-https
+    ports:
+      - "55002:443"
+    volumes:
+      - ./phpmyadmin/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+      - api-manager-phpmyadmin-data:/data
+      - api-manager-phpmyadmin-config:/config
+    depends_on:
+      - phpmyadmin
     restart: unless-stopped
 
 volumes:
   api-manager-db-data:
   api-manager-tls:
   api-manager-jwt:
+  api-manager-phpmyadmin-data:
+  api-manager-phpmyadmin-config:
