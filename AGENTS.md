@@ -8,6 +8,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - React + Vite frontend in `frontend/`.
 - Podman Compose + DB init SQL in `infra/`.
 - Scripts in `scripts/`.
+- phpMyAdmin served over HTTPS via Caddy (`infra/phpmyadmin/Caddyfile`).
 - No Cursor or Copilot rules were found (`.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`).
 
 ## Build, lint, and test commands
@@ -32,9 +33,19 @@ If guidance here conflicts with existing project conventions, follow the project
 - Build: `scripts/build.sh`
 - Rebuild: `scripts/rebuild.sh`
 - Remove: `scripts/remove.sh` (use `--purge` to delete volumes)
+- Scripts load `.env` automatically; copy `.env.example` to `.env`.
+- Use `scripts/rebuild.sh` after code changes to restart services.
+- `remove.sh --purge` only deletes volumes not in use and scoped to `api-manager-pod`.
+- Container names are explicit (no `_1` suffix), e.g., `api-manager-backend`, `api-manager-mariadb`.
 
 ### Tests
 - No automated tests configured yet.
+
+### Health checks
+- Healthchecks are configured in `infra/podman-compose.yml` for DB, backend, and frontend.
+
+### Reports
+- Report endpoints accept optional `from` and `to` query params (ISO date or datetime).
 
 ### Common single-test patterns (use only if repo matches)
 - JavaScript/TypeScript (Jest): `npx jest <testNameOrPath>` or `npm test -- <pattern>`.
@@ -155,6 +166,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - Never delete or revert unrelated changes.
 - Keep changes minimal and consistent with existing style.
 - Ask a targeted question only if blocked.
+- Do not run any git commands.
 
 ## TODO for repository maintainers
 - Add a README describing the project purpose.
@@ -167,6 +179,8 @@ If guidance here conflicts with existing project conventions, follow the project
 ·	Database stores UTC timestamps.
 ·	Frontend displays SAST.
 ·	Never store local time in DB.
+·	Access logs include response header bytes (response_header_bytes).
+·	Frontend date inputs use YYYY-MM-DD format.
 
 # Do / Don’t Checklist
 ## Do
