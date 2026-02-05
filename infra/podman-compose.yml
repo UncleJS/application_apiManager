@@ -6,10 +6,10 @@ services:
     pod: api-manager-pod
     container_name: api-manager-mariadb
     environment:
-      MARIADB_ROOT_PASSWORD: root_password
-      MARIADB_DATABASE: api_manager
-      MARIADB_USER: api_manager
-      MARIADB_PASSWORD: api_manager_password
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
     volumes:
       - api-manager-db-data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -24,16 +24,16 @@ services:
       HOST: 0.0.0.0
       DB_HOST: mariadb
       DB_PORT: 3306
-      DB_USER: api_manager
-      DB_PASSWORD: api_manager_password
-      DB_DATABASE: api_manager
+      DB_USER: ${MARIADB_USER}
+      DB_PASSWORD: ${MARIADB_PASSWORD}
+      DB_DATABASE: ${MARIADB_DATABASE}
       JWT_SECRET_PATH: /data/jwt/secret
       TLS_CERT_PATH: /data/tls/cert.pem
       TLS_KEY_PATH: /data/tls/key.pem
       BOOTSTRAP_ADMIN: ${BOOTSTRAP_ADMIN:-true}
-      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-001002..Ad}
-      SEED_DATA: ${SEED_DATA:-false}
-      SEED_ACCESS_LOGS: ${SEED_ACCESS_LOGS:-false}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      SEED_DATA: ${SEED_DATA}
+      SEED_ACCESS_LOGS: ${SEED_ACCESS_LOGS}
       CORS_ORIGIN: http://localhost:55000
     volumes:
       - api-manager-tls:/data/tls
@@ -49,7 +49,7 @@ services:
     pod: api-manager-pod
     container_name: api-manager-frontend
     environment:
-      VITE_API_BASE_URL: https://localhost:55001
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
       - "55000:55000"
     depends_on:
@@ -63,8 +63,8 @@ services:
     environment:
       PMA_HOST: mariadb
       PMA_PORT: 3306
-      PMA_USER: api_manager
-      PMA_PASSWORD: api_manager_password
+      PMA_USER: ${MARIADB_USER}
+      PMA_PASSWORD: ${MARIADB_PASSWORD}
     ports:
       - "55002:80"
     depends_on:

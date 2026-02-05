@@ -5,6 +5,10 @@ Reverse proxy with HTTPS, access controls, and reporting.
 ## Usage
 See `docs/operations.md` for setup, ports, seed data, and admin login.
 
+Environment file:
+- Copy `.env.example` to `.env` and update secrets.
+- `live.env` is ignored by git.
+
 ### build.sh vs rebuild.sh
 - `scripts/build.sh` builds images only; running containers keep using the old image.
 - `scripts/rebuild.sh` stops containers, rebuilds images, and starts services again.

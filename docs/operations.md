@@ -47,6 +47,8 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
   - If compose labels are missing, it only removes volumes whose names start with `infra_api-manager-` or `api-manager-`.
 
 ## Environment variables
+Create a `.env` file at repo root (see `.env.example`).
+
 Backend (set in `infra/podman-compose.yml`):
 - `PORT` (default 55001)
 - `DB_HOST` (default 127.0.0.1)
