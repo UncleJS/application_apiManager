@@ -4,10 +4,11 @@ import { pipeline } from "stream/promises";
 import { buildError } from "./utils/errors";
 import { getMatchingApi, getNowSast, isWithinWindows, ApiDefinition, UserRecord } from "./access";
 import { logAccess } from "./logging";
-import { verifyToken } from "./auth";
-import { query } from "./db";
+import { config } from "./config";
 import { nowUtc } from "./utils/datetime";
-import { parseCookies } from "./utils/cookies";
+import { buildCookie, parseCookies } from "./utils/cookies";
+import { getSessionUser, isSessionExpired, revokeSession, SESSION_COOKIE, touchSession } from "./sessions";
+import { query } from "./db";
 
 function joinPaths(basePath: string, suffix: string): string {
   const base = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
@@ -32,17 +33,6 @@ function computeHeaderBytes(headers: Record<string, string>): number {
   return total;
 }
 
-async function getUserRecord(userId: number): Promise<UserRecord | null> {
-  const rows = await query<UserRecord[]>(
-    "SELECT u.id, u.organization_id, r.name as role, s.name as status FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE u.id = ?",
-    [userId]
-  );
-  if (!rows || rows.length === 0) {
-    return null;
-  }
-  return rows[0];
-}
-
 async function isAssigned(userId: number, apiId: number): Promise<boolean> {
   const rows = await query<any[]>("SELECT id FROM user_api_permissions WHERE user_id = ? AND api_id = ?", [userId, apiId]);
   return rows && rows.length > 0;
@@ -54,19 +44,33 @@ async function authorize(
 ): Promise<{ allowed: boolean; reason?: { code: string; status: number; message: string; details?: Record<string, unknown> }; user: UserRecord | null }> {
   const authHeader = request.headers.authorization;
   let user: UserRecord | null = null;
-  const cookieToken = parseCookies(request.headers.cookie)["api_manager_token"];
+  const cookieToken = parseCookies(request.headers.cookie)[SESSION_COOKIE];
   const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : cookieToken;
+  let sessionId: number | null = null;
 
   if (token) {
-    try {
-      const payload = verifyToken(token);
-      user = await getUserRecord(payload.userId);
-      if (!user) {
-        return { allowed: false, reason: { code: "INVALID_TOKEN", status: 401, message: "Invalid token" }, user: null };
-      }
-    } catch {
+    const session = await getSessionUser(token);
+    if (!session) {
       return { allowed: false, reason: { code: "INVALID_TOKEN", status: 401, message: "Invalid token" }, user: null };
     }
+
+    if (session.status !== "active") {
+      return { allowed: false, reason: { code: "USER_ARCHIVED", status: 403, message: "User archived" }, user: null };
+    }
+
+    if (isSessionExpired(session, config.sessionIdleSeconds, config.sessionHardMaxSeconds)) {
+      await revokeSession(session.session_id);
+      return { allowed: false, reason: { code: "SESSION_EXPIRED", status: 401, message: "Session expired" }, user: null };
+    }
+
+    user = {
+      id: session.user_id,
+      organization_id: session.organization_id,
+      role: session.role,
+      status: session.status
+    };
+    sessionId = session.session_id;
+    await touchSession(sessionId);
   }
 
   if (api.is_enabled === 0) {
@@ -90,8 +94,8 @@ async function authorize(
   }
 
     if (api.is_public === 1) {
-      return { allowed: true, user };
-    }
+    return { allowed: true, user };
+  }
 
     if (!user) {
     return { allowed: false, reason: { code: "AUTH_REQUIRED", status: 401, message: "Authorization required" }, user: null };
@@ -138,11 +142,34 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
   const decision = await authorize(api, request);
   if (!decision.allowed) {
     const status = decision.reason!.status;
-    if (decision.reason!.code === "AUTH_REQUIRED") {
+    if (
+      decision.reason!.code === "AUTH_REQUIRED" ||
+      decision.reason!.code === "SESSION_EXPIRED" ||
+      decision.reason!.code === "INVALID_TOKEN"
+    ) {
       const accept = request.headers.accept || "";
       if (accept.includes("text/html")) {
         const returnTo = encodeURIComponent(`${url.pathname}${url.search}`);
         return reply.redirect(`/login?returnTo=${returnTo}`);
+      }
+    }
+
+    if (
+      decision.reason!.code === "SESSION_EXPIRED" ||
+      decision.reason!.code === "INVALID_TOKEN"
+    ) {
+      const cookieToken = parseCookies(request.headers.cookie)[SESSION_COOKIE];
+      if (cookieToken) {
+        reply.header(
+          "Set-Cookie",
+          buildCookie(SESSION_COOKIE, "", {
+            httpOnly: true,
+            secure: true,
+            sameSite: "Lax",
+            path: "/",
+            maxAgeSeconds: 0
+          })
+        );
       }
     }
 

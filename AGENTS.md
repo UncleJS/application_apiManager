@@ -9,6 +9,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - Podman Compose + DB init SQL in `infra/`.
 - Scripts in `scripts/`.
 - phpMyAdmin served over HTTPS via Caddy (`infra/phpmyadmin/Caddyfile`).
+- Auth uses DB-backed sessions with cookie `api_manager_session`.
 - No Cursor or Copilot rules were found (`.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`).
 
 ## Build, lint, and test commands

@@ -79,5 +79,7 @@ export const config = {
   seedData: process.env.SEED_DATA === "true",
   seedAccessLogs: process.env.SEED_ACCESS_LOGS === "true",
   bootstrapAdmin: process.env.BOOTSTRAP_ADMIN !== "false",
-  bootstrapPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "001002..Ad"
+  bootstrapPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "001002..Ad",
+  sessionIdleSeconds: Number.parseInt(process.env.SESSION_IDLE_SECONDS ?? "3600", 10),
+  sessionHardMaxSeconds: Number.parseInt(process.env.SESSION_HARD_MAX_SECONDS ?? "10800", 10)
 };

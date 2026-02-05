@@ -1,44 +1,60 @@
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import LoginPage from "./pages/LoginPage";
 import OrgsPage from "./pages/OrgsPage";
 import UsersPage from "./pages/UsersPage";
 import ApisPage from "./pages/ApisPage";
 import ReportsPage from "./pages/ReportsPage";
-import { clearToken, getToken } from "./api";
-import { parseJwt } from "./utils/auth";
+import { getMe, logout } from "./api";
 
 export default function App() {
-  const [token, setTokenState] = useState(getToken());
+  const [identity, setIdentity] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const handler = () => setTokenState(getToken());
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
+  const displayName = identity?.username ? identity.username : identity ? `User ${identity.id}` : "";
 
-  const identity = useMemo(() => (token ? parseJwt(token) : null), [token]);
-  const displayName = identity?.username ? identity.username : identity ? `User ${identity.userId}` : "";
-
-  useEffect(() => {
-    if (token && !identity) {
-      clearToken();
-      setTokenState(null);
-      navigate("/login");
+  const loadIdentity = async () => {
+    try {
+      const data = await getMe();
+      setIdentity(data.user);
+    } catch {
+      setIdentity(null);
+    } finally {
+      setLoading(false);
     }
-  }, [token, identity, navigate]);
-
-  const handleLogout = () => {
-    clearToken();
-    setTokenState(null);
-    navigate("/login");
   };
 
-  if (!token || !identity) {
+  useEffect(() => {
+    loadIdentity();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      setIdentity(null);
+      navigate("/login");
+    };
+    window.addEventListener("auth:required", handler);
+    return () => window.removeEventListener("auth:required", handler);
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      setIdentity(null);
+      navigate("/login");
+    }
+  };
+
+  if (loading) {
+    return null;
+  }
+
+  if (!identity) {
     return (
       <Routes>
-        <Route path="*" element={<LoginPage onLogin={() => setTokenState(getToken())} />} />
+        <Route path="*" element={<LoginPage onLogin={loadIdentity} />} />
       </Routes>
     );
   }

@@ -1,10 +1,9 @@
 import { FastifyInstance } from "fastify";
-import { DateTime } from "luxon";
 import { query } from "../db";
-import { verifyPassword, signToken } from "../auth";
-import { buildCookie } from "../utils/cookies";
-
-const TOKEN_COOKIE = "api_manager_token";
+import { verifyPassword } from "../auth";
+import { buildCookie, parseCookies } from "../utils/cookies";
+import { config } from "../config";
+import { createSession, revokeSessionByToken, SESSION_COOKIE } from "../sessions";
 
 function isSafeReturnTo(value: string | undefined): value is string {
   if (!value) {
@@ -109,27 +108,35 @@ export async function registerLoginRoutes(app: FastifyInstance) {
       return reply.type("text/html").send(renderLoginPage({ error: "Invalid credentials", returnTo }));
     }
 
-    const token = signToken({
+    const userAgentHeader = request.headers["user-agent"];
+    const userAgent = Array.isArray(userAgentHeader) ? userAgentHeader.join(" ") : userAgentHeader;
+
+    const token = await createSession({
       userId: user.id,
-      role: user.role,
-      organizationId: user.organization_id,
-      username: user.username
+      userAgent,
+      clientIp: request.ip,
+      idleSeconds: config.sessionIdleSeconds,
+      hardMaxSeconds: config.sessionHardMaxSeconds
     });
 
-    const cookie = buildCookie(TOKEN_COOKIE, token, {
+    const cookie = buildCookie(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: true,
       sameSite: "Lax",
       path: "/",
-      maxAgeSeconds: 12 * 60 * 60
+      maxAgeSeconds: config.sessionHardMaxSeconds
     });
 
     reply.header("Set-Cookie", cookie);
     reply.redirect(returnTo || "/");
   });
 
-  app.post("/logout", async (_request, reply) => {
-    const cookie = buildCookie(TOKEN_COOKIE, "", {
+  app.post("/logout", async (request, reply) => {
+    const token = parseCookies(request.headers.cookie)[SESSION_COOKIE];
+    if (token) {
+      await revokeSessionByToken(token);
+    }
+    const cookie = buildCookie(SESSION_COOKIE, "", {
       httpOnly: true,
       secure: true,
       sameSite: "Lax",

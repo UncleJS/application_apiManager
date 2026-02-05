@@ -32,6 +32,8 @@ services:
       DB_USER: ${MARIADB_USER}
       DB_PASSWORD: ${MARIADB_PASSWORD}
       DB_DATABASE: ${MARIADB_DATABASE}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS}
+      SESSION_HARD_MAX_SECONDS: ${SESSION_HARD_MAX_SECONDS}
       JWT_SECRET_PATH: /data/jwt/secret
       TLS_CERT_PATH: /data/tls/cert.pem
       TLS_KEY_PATH: /data/tls/key.pem

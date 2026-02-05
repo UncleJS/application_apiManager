@@ -1,5 +1,4 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://localhost:55001";
-let inMemoryToken: string | null = null;
 
 export type ApiError = {
   code: string;
@@ -7,49 +6,16 @@ export type ApiError = {
   details?: Record<string, unknown>;
 };
 
-export function setToken(token: string) {
-  inMemoryToken = token;
-  try {
-    localStorage.setItem("api-manager-token", token);
-  } catch {
-    // ignore storage failures
-  }
-}
-
-export function getToken(): string | null {
-  if (inMemoryToken) {
-    return inMemoryToken;
-  }
-  try {
-    return localStorage.getItem("api-manager-token");
-  } catch {
-    return null;
-  }
-}
-
-export function clearToken() {
-  inMemoryToken = null;
-  try {
-    localStorage.removeItem("api-manager-token");
-  } catch {
-    // ignore storage failures
-  }
-}
-
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined)
   };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers
+    headers,
+    credentials: "include"
   });
 
   const contentType = response.headers.get("content-type") || "";
@@ -57,7 +23,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     if (response.status === 401) {
-      clearToken();
+      window.dispatchEvent(new Event("auth:required"));
     }
     throw payload || { code: "REQUEST_FAILED", message: "Request failed" };
   }
@@ -66,12 +32,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export async function login(username: string, password: string) {
-  const data = await request<{ token: string }>("/auth/login", {
+  const data = await request<{ sessionToken: string }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password })
   });
-  setToken(data.token);
   return data;
+}
+
+export async function logout() {
+  return request("/auth/logout", { method: "POST" });
+}
+
+export async function getMe() {
+  return request<{ user: any }>("/auth/me");
 }
 
 export async function getOrgs() {

@@ -116,6 +116,22 @@ CREATE TABLE IF NOT EXISTS access_logs (
   INDEX idx_access_time (created_at_utc)
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  session_token_hash CHAR(64) NOT NULL,
+  user_id INT NOT NULL,
+  created_at_utc DATETIME NOT NULL,
+  last_activity_utc DATETIME NOT NULL,
+  expires_at_utc DATETIME NOT NULL,
+  revoked_at_utc DATETIME NULL,
+  user_agent VARCHAR(255) NULL,
+  client_ip VARCHAR(64) NULL,
+  CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE KEY uq_session_hash (session_token_hash),
+  INDEX idx_session_user (user_id),
+  INDEX idx_session_last_activity (last_activity_utc)
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   organization_id INT NOT NULL,

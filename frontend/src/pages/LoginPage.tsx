@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login } from "../api";
 
 type Props = {
-  onLogin: () => void;
+  onLogin: () => void | Promise<void>;
 };
 
 export default function LoginPage({ onLogin }: Props) {
@@ -17,7 +17,7 @@ export default function LoginPage({ onLogin }: Props) {
     setError(null);
     try {
       await login(username, password);
-      onLogin();
+      await onLogin();
       navigate("/apis");
     } catch (err: any) {
       const message = err?.message ?? "Login failed";

@@ -20,6 +20,11 @@ Notes:
 - phpMyAdmin is served over HTTPS via an internal proxy and uses a self-signed cert.
 - MariaDB has no host port; it is only reachable inside the pod.
 
+## Sessions
+- Browser sessions use an HTTP-only cookie (`api_manager_session`).
+- API clients use `Authorization: Bearer <sessionToken>` from `/auth/login`.
+- Idle timeout: 60 minutes. Hard max: 180 minutes.
+
 ## Health checks
 Container healthchecks are configured in `infra/podman-compose.yml` for:
 - MariaDB (ping)
@@ -79,6 +84,8 @@ Backend (set in `infra/podman-compose.yml`):
 - `CORS_ORIGIN` (default http://localhost:55000)
 - `DB_WAIT_RETRIES` (default 60)
 - `DB_WAIT_DELAY_MS` (default 2000)
+- `SESSION_IDLE_SECONDS` (default 3600)
+- `SESSION_HARD_MAX_SECONDS` (default 10800)
 
 Setup script:
 - `DB_ROOT_PASSWORD` (default root_password)
@@ -100,6 +107,9 @@ The suffix after `base_path` is appended to `target_url`.
 Browser login flow:
 - If a restricted API is accessed in a browser, the user is redirected to `/login`.
 - After successful login, the user is redirected back to the original URL.
+API client login flow:
+- `POST /auth/login` returns `{ sessionToken }`.
+- Send `Authorization: Bearer <sessionToken>` on each request.
 
 Example 1 (simple passthrough):
 - base_path: `/acme/orders`

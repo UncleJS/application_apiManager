@@ -53,7 +53,7 @@ if [ "$db_ready" != "true" ]; then
 fi
 
 missing_schema="false"
-for table in organizations organization_statuses roles user_statuses api_definitions; do
+for table in organizations organization_statuses roles user_statuses api_definitions sessions; do
   if ! podman exec api-manager-mariadb mariadb -h "$DB_HOST" -u root -p"$DB_ROOT_PASSWORD" -e "USE api_manager; SHOW TABLES LIKE '$table';" | grep -q "$table"; then
     missing_schema="true"
     break
