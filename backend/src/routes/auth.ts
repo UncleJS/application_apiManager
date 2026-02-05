@@ -18,7 +18,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const { username, password } = parseResult.data;
     const rows = await query<any[]>(
-      "SELECT u.id, u.password_hash, u.organization_id, r.name as role, s.name as status FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE u.username = ?",
+      "SELECT u.id, u.username, u.password_hash, u.organization_id, r.name as role, s.name as status FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE u.username = ?",
       [username]
     );
 
@@ -39,7 +39,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const token = signToken({
       userId: user.id,
       role: user.role,
-      organizationId: user.organization_id
+      organizationId: user.organization_id,
+      username: user.username
     });
 
     return reply.send({ token });

@@ -19,6 +19,7 @@ export default function App() {
   }, []);
 
   const identity = useMemo(() => (token ? parseJwt(token) : null), [token]);
+  const displayName = identity?.username ? identity.username : identity ? `User ${identity.userId}` : "";
 
   useEffect(() => {
     if (token && !identity) {
@@ -46,6 +47,7 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">API Manager</div>
+        {displayName && <div className="muted">Signed in as {displayName}</div>}
         <nav className="nav">
           {identity.role === "global_admin" && <NavLink to="/orgs">Organizations</NavLink>}
           <NavLink to="/users">Users</NavLink>

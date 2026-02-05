@@ -6,6 +6,7 @@ export type JwtPayload = {
   userId: number;
   role: string;
   organizationId: number;
+  username: string;
 };
 
 const jwtSecret = getJwtSecret(config.jwt.secretPath);
