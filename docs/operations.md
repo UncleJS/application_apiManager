@@ -97,6 +97,10 @@ Frontend:
 Requests to the backend HTTPS port are routed by longest-prefix match on `base_path`.
 The suffix after `base_path` is appended to `target_url`.
 
+Browser login flow:
+- If a restricted API is accessed in a browser, the user is redirected to `/login`.
+- After successful login, the user is redirected back to the original URL.
+
 Example 1 (simple passthrough):
 - base_path: `/acme/orders`
 - target_url: `https://example.com/acme/orders`

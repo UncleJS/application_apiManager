@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config, ensureTls } from "./config";
 import { registerAuthRoutes } from "./routes/auth";
+import { registerLoginRoutes } from "./routes/login";
 import { registerOrgRoutes } from "./routes/orgs";
 import { registerUserRoutes } from "./routes/users";
 import { registerApiRoutes } from "./routes/apis";
@@ -55,6 +56,7 @@ export async function buildServer() {
   });
 
   await registerAuthRoutes(app);
+  await registerLoginRoutes(app);
 
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook("preHandler", authenticate());

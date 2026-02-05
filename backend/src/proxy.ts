@@ -7,6 +7,7 @@ import { logAccess } from "./logging";
 import { verifyToken } from "./auth";
 import { query } from "./db";
 import { nowUtc } from "./utils/datetime";
+import { parseCookies } from "./utils/cookies";
 
 function joinPaths(basePath: string, suffix: string): string {
   const base = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
@@ -53,9 +54,12 @@ async function authorize(
 ): Promise<{ allowed: boolean; reason?: { code: string; status: number; message: string; details?: Record<string, unknown> }; user: UserRecord | null }> {
   const authHeader = request.headers.authorization;
   let user: UserRecord | null = null;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
+  const cookieToken = parseCookies(request.headers.cookie)["api_manager_token"];
+  const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : cookieToken;
+
+  if (token) {
     try {
-      const payload = verifyToken(authHeader.slice("Bearer ".length));
+      const payload = verifyToken(token);
       user = await getUserRecord(payload.userId);
       if (!user) {
         return { allowed: false, reason: { code: "INVALID_TOKEN", status: 401, message: "Invalid token" }, user: null };
@@ -85,13 +89,13 @@ async function authorize(
     }
   }
 
-  if (api.is_public === 1) {
-    return { allowed: true, user };
-  }
+    if (api.is_public === 1) {
+      return { allowed: true, user };
+    }
 
-  if (!user) {
+    if (!user) {
     return { allowed: false, reason: { code: "AUTH_REQUIRED", status: 401, message: "Authorization required" }, user: null };
-  }
+    }
 
   if (user.status !== "active") {
     return { allowed: false, reason: { code: "USER_ARCHIVED", status: 403, message: "User archived" }, user };
@@ -134,6 +138,14 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
   const decision = await authorize(api, request);
   if (!decision.allowed) {
     const status = decision.reason!.status;
+    if (decision.reason!.code === "AUTH_REQUIRED") {
+      const accept = request.headers.accept || "";
+      if (accept.includes("text/html")) {
+        const returnTo = encodeURIComponent(`${url.pathname}${url.search}`);
+        return reply.redirect(`/login?returnTo=${returnTo}`);
+      }
+    }
+
     const errorPayload = buildError(decision.reason!.code, decision.reason!.message, decision.reason!.details ?? {});
     const responseBody = JSON.stringify(errorPayload);
     await logAccess({
