@@ -1,0 +1,77 @@
+version: "3.8"
+
+services:
+  mariadb:
+    image: mariadb:11
+    pod: api-manager-pod
+    container_name: api-manager-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: root_password
+      MARIADB_DATABASE: api_manager
+      MARIADB_USER: api_manager
+      MARIADB_PASSWORD: api_manager_password
+    volumes:
+      - api-manager-db-data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    restart: unless-stopped
+
+  backend:
+    build: ../backend
+    pod: api-manager-pod
+    container_name: api-manager-backend
+    environment:
+      PORT: 55001
+      HOST: 0.0.0.0
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: api_manager
+      DB_PASSWORD: api_manager_password
+      DB_DATABASE: api_manager
+      JWT_SECRET_PATH: /data/jwt/secret
+      TLS_CERT_PATH: /data/tls/cert.pem
+      TLS_KEY_PATH: /data/tls/key.pem
+      BOOTSTRAP_ADMIN: ${BOOTSTRAP_ADMIN:-true}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-001002..Ad}
+      SEED_DATA: ${SEED_DATA:-false}
+      SEED_ACCESS_LOGS: ${SEED_ACCESS_LOGS:-false}
+      CORS_ORIGIN: http://localhost:55000
+    volumes:
+      - api-manager-tls:/data/tls
+      - api-manager-jwt:/data/jwt
+    depends_on:
+      - mariadb
+    ports:
+      - "55001:55001"
+    restart: unless-stopped
+
+  frontend:
+    build: ../frontend
+    pod: api-manager-pod
+    container_name: api-manager-frontend
+    environment:
+      VITE_API_BASE_URL: https://localhost:55001
+    ports:
+      - "55000:55000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    pod: api-manager-pod
+    container_name: api-manager-phpmyadmin
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      PMA_USER: api_manager
+      PMA_PASSWORD: api_manager_password
+    ports:
+      - "55002:80"
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+
+volumes:
+  api-manager-db-data:
+  api-manager-tls:
+  api-manager-jwt:

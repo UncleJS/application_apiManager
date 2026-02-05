@@ -4,14 +4,37 @@ This file guides automated coding agents working in this repository.
 If guidance here conflicts with existing project conventions, follow the project.
 
 ## Repository status
-- Current workspace contains only `.git` and no source/config files.
+- Node.js + TypeScript backend in `backend/`.
+- React + Vite frontend in `frontend/`.
+- Podman Compose + DB init SQL in `infra/`.
+- Scripts in `scripts/`.
 - No Cursor or Copilot rules were found (`.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`).
-- Update this document as soon as tooling or code is added.
 
 ## Build, lint, and test commands
-- No build/lint/test tooling detected yet.
-- When tooling is added, update this section with exact commands and flags.
-- Prefer a Makefile or package scripts that standardize these commands.
+
+### Backend (`backend/`)
+- Install: `npm install`
+- Dev server: `npm run dev`
+- Build: `npm run build`
+- Start: `npm run start`
+- Lint: `npm run lint`
+- Seed (dev/test): `npm run seed`
+
+### Frontend (`frontend/`)
+- Install: `npm install`
+- Dev server: `npm run dev`
+- Build: `npm run build`
+- Preview: `npm run preview`
+- Lint: `npm run lint`
+
+### Podman scripts
+- Setup: `scripts/setup.sh`
+- Build: `scripts/build.sh`
+- Rebuild: `scripts/rebuild.sh`
+- Remove: `scripts/remove.sh` (use `--purge` to delete volumes)
+
+### Tests
+- No automated tests configured yet.
 
 ### Common single-test patterns (use only if repo matches)
 - JavaScript/TypeScript (Jest): `npx jest <testNameOrPath>` or `npm test -- <pattern>`.
@@ -26,11 +49,12 @@ If guidance here conflicts with existing project conventions, follow the project
 - PHP (PHPUnit): `vendor/bin/phpunit --filter <pattern> <file>`.
 - .NET (xUnit/NUnit/MSTest): `dotnet test --filter <expression>`.
 
-### Recommended canonical commands (fill in later)
-- Build: `make build` or `npm run build` or `./gradlew build`.
-- Lint: `make lint` or `npm run lint` or `ruff check`.
-- Format: `make format` or `npm run format` or `ruff format`.
-- Test: `make test` or `npm test` or `pytest`.
+### Recommended canonical commands
+- Backend build: `npm run build` (from `backend/`)
+- Backend lint: `npm run lint` (from `backend/`)
+- Frontend build: `npm run build` (from `frontend/`)
+- Frontend lint: `npm run lint` (from `frontend/`)
+- No formatter/test commands yet
 
 ## Code style guidelines
 - Follow existing conventions in the repo; if none exist, use the defaults below.
@@ -55,7 +79,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - Variables/functions: `camelCase` for JS/TS, `snake_case` for Python; follow language norms.
 - Types/classes/components: `PascalCase`.
 - Constants: `SCREAMING_SNAKE_CASE` when truly constant.
-- Files/directories: prefer `kebab-case` by default.
+- Files/directories: `kebab-case` for non-component files; React components use `PascalCase.tsx`.
 - Exception: follow language conventions (e.g., Python modules `snake_case`, Go files `snake_case`).
 - Tests: name files to mirror the unit under test, e.g., `foo.test.ts` or `test_foo.py`.
 
@@ -109,13 +133,15 @@ If guidance here conflicts with existing project conventions, follow the project
 ## File naming conventions (recommended defaults)
 - Directories: `kebab-case`.
 - JS/TS files: `camelCase.ts` or `camelCase.tsx`.
+- React components: `PascalCase.tsx`.
+- SQL files: `snake_case.sql`.
 - Python files: `snake_case.py`.
 - Go files: `snake_case.go`.
 - Rust files: `snake_case.rs`.
 - Tests: match the language norm (`*.test.ts`, `*_test.go`, `test_*.py`).
 - Config files: follow tool conventions (e.g., `.eslintrc.cjs`, `pyproject.toml`).
-- React components: PascalCase
-- DB/API fields: camelCase
+- DB columns: `snake_case`.
+- API JSON fields: `camelCase`.
 - Docs filenames must be strict camelCase (repo-owned docs only).
 
 ## When you add tooling, update this section
@@ -132,8 +158,7 @@ If guidance here conflicts with existing project conventions, follow the project
 
 ## TODO for repository maintainers
 - Add a README describing the project purpose.
-- Add build/lint/test tooling and document it here.
-- Add coding standards per language once code exists.
+- Add automated tests and document commands here.
 
 ## Cursor/Copilot rules
 - None found at the time of writing.
@@ -159,13 +184,13 @@ If guidance here conflicts with existing project conventions, follow the project
 
 
 ## Appendix: command placeholders (replace with real ones)
-- Build: `<command>`
-- Lint: `<command>`
+- Build: `npm run build` (from `backend/` or `frontend/`)
+- Lint: `npm run lint` (from `backend/` or `frontend/`)
 - Format: `<command>`
 - Test (all): `<command>`
 - Test (single): `<command>`
-- Dev server: `<command>`
-- Typecheck: `<command>`
+- Dev server: `npm run dev` (from `backend/` or `frontend/`)
+- Typecheck: `npm run build` (backend) / `tsc --noEmit` (frontend if added)
 - Clean: `<command>`
 - Docs: `<command>`
 - Release: `<command>`
