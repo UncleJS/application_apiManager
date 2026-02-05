@@ -9,6 +9,7 @@ export async function logAccess(params: {
   status: number;
   requestBytes: number;
   responseBytes: number;
+  responseHeaderBytes: number;
   durationMs: number;
   clientIp: string;
   denyReasonCode?: string | null;
@@ -19,7 +20,7 @@ export async function logAccess(params: {
     : null;
 
   await query(
-    "INSERT INTO access_logs (organization_id, user_id, api_id, method, path, status, request_bytes, response_bytes, duration_ms, client_ip, deny_reason_id, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO access_logs (organization_id, user_id, api_id, method, path, status, request_bytes, response_bytes, response_header_bytes, duration_ms, client_ip, deny_reason_id, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       params.organizationId,
       params.userId,
@@ -29,6 +30,7 @@ export async function logAccess(params: {
       params.status,
       params.requestBytes,
       params.responseBytes,
+      params.responseHeaderBytes,
       params.durationMs,
       params.clientIp,
       reasonId,

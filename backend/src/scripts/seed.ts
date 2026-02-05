@@ -1,6 +1,6 @@
 import { DateTime } from "luxon";
 import { hashPassword } from "../auth";
-import { query, withConnection } from "../db";
+import { pool, query, withConnection } from "../db";
 import { nowUtc, toUtcSql } from "../utils/datetime";
 
 const DEFAULT_PASSWORD = "001002..Ad";
@@ -240,6 +240,7 @@ export async function seedAccessLogs(timezone: string): Promise<void> {
 
   const totalRows = 250000;
   const batchSize = 1000;
+  let nextLogAt = 10000;
 
   const denyMix = [
     { code: "USER_OUTSIDE_ALLOWED_HOURS", weight: 0.5 },
@@ -309,6 +310,9 @@ export async function seedAccessLogs(timezone: string): Promise<void> {
         const responseBytes = isDenied
           ? 100 + Math.floor(Math.random() * 1900)
           : 500 + Math.floor(Math.random() * 49500);
+        const responseHeaderBytes = isDenied
+          ? 200 + Math.floor(Math.random() * 600)
+          : 300 + Math.floor(Math.random() * 1200);
 
         const status = denyReason === "AUTH_REQUIRED" ? 401 : isDenied ? 403 : 200;
 
@@ -326,6 +330,7 @@ export async function seedAccessLogs(timezone: string): Promise<void> {
           status,
           requestBytes,
           responseBytes,
+          responseHeaderBytes,
           durationMs,
           randomIp(),
           denyReasonId,
@@ -334,11 +339,15 @@ export async function seedAccessLogs(timezone: string): Promise<void> {
       }
 
       await connection.batch(
-        "INSERT INTO access_logs (organization_id, user_id, api_id, method, path, status, request_bytes, response_bytes, duration_ms, client_ip, deny_reason_id, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO access_logs (organization_id, user_id, api_id, method, path, status, request_bytes, response_bytes, response_header_bytes, duration_ms, client_ip, deny_reason_id, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         batch
       );
 
       inserted += batchCount;
+      if (inserted >= nextLogAt) {
+        console.log(`Seeded access logs: ${inserted}/${totalRows}`);
+        nextLogAt += 10000;
+      }
     }
   });
 }
@@ -371,8 +380,15 @@ async function runSeed() {
 }
 
 if (require.main === module) {
-  runSeed().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+  (async () => {
+    try {
+      await runSeed();
+      process.exitCode = 0;
+    } catch (error) {
+      console.error(error);
+      process.exitCode = 1;
+    } finally {
+      await pool.end();
+    }
+  })();
 }

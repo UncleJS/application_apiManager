@@ -12,6 +12,17 @@ See `docs/operations.md` for setup, ports, seed data, and admin login.
 - Use `rebuild.sh` when you need code changes to take effect immediately.
 - Neither script removes volumes or deletes data.
 
+### Volume removal safety
+- `scripts/remove.sh --purge` only deletes volumes not in use and only used by `api-manager-pod`.
+- If compose labels are missing, it only removes volumes with names starting `infra_api-manager-` or `api-manager-`.
+
+### Reports date range
+All report endpoints accept optional `from` and `to` query params (ISO date or datetime).
+- Example: `/reports/orgs/weekly?from=2025-01-01&to=2026-02-03`
+- If omitted, the current week or month is used.
+
+
+
 ## Structure
 - `backend/`: Node.js + TypeScript Fastify API/proxy
 - `frontend/`: React admin UI

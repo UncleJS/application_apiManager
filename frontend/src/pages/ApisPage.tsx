@@ -182,6 +182,13 @@ export default function ApisPage({ role, organizationId }: Props) {
               <input value={selectedApi.name} onChange={(event) => handleUpdate(selectedApi.id, { name: event.target.value })} />
             </div>
             <div>
+              <label>Base path</label>
+              <input
+                value={selectedApi.base_path}
+                onChange={(event) => handleUpdate(selectedApi.id, { basePath: event.target.value })}
+              />
+            </div>
+            <div>
               <label>Target URL</label>
               <input
                 value={selectedApi.target_url}

@@ -20,6 +20,14 @@ export default function App() {
 
   const identity = useMemo(() => (token ? parseJwt(token) : null), [token]);
 
+  useEffect(() => {
+    if (token && !identity) {
+      clearToken();
+      setTokenState(null);
+      navigate("/login");
+    }
+  }, [token, identity, navigate]);
+
   const handleLogout = () => {
     clearToken();
     setTokenState(null);

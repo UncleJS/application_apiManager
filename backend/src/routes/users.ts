@@ -29,6 +29,14 @@ async function getRoleName(roleId: number): Promise<string> {
   return rows[0].name;
 }
 
+async function getUserOrgId(userId: number): Promise<number | null> {
+  const rows = await query<{ organization_id: number }[]>("SELECT organization_id FROM users WHERE id = ?", [userId]);
+  if (!rows || rows.length === 0) {
+    return null;
+  }
+  return rows[0].organization_id;
+}
+
 export async function registerUserRoutes(app: FastifyInstance) {
   app.get("/users", async (request, reply) => {
     const authUser = request.authUser!;
@@ -50,6 +58,9 @@ export async function registerUserRoutes(app: FastifyInstance) {
       return reply.status(403).send(buildError("FORBIDDEN", "Cannot create users outside your organization"));
     }
 
+    const targetOrganizationId =
+      authUser.role === "org_admin" ? authUser.organizationId : parseResult.data.organizationId;
+
     const targetRole = await getRoleName(parseResult.data.roleId);
     if (authUser.role === "org_admin" && targetRole === "global_admin") {
       return reply.status(403).send(buildError("FORBIDDEN", "Cannot create global admins"));
@@ -64,7 +75,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
       [
         parseResult.data.username,
         passwordHash,
-        parseResult.data.organizationId,
+        targetOrganizationId,
         parseResult.data.roleId,
         statusId,
         now,
@@ -76,7 +87,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
     const createdId = created[0].id;
 
     await logAudit({
-      organizationId: parseResult.data.organizationId,
+      organizationId: targetOrganizationId,
       userId: authUser.id,
       actionCode: "USER_CREATE",
       entityName: "user",
@@ -100,8 +111,15 @@ export async function registerUserRoutes(app: FastifyInstance) {
       return reply.status(400).send(buildError("INVALID_REQUEST", "Invalid user id"));
     }
 
-    if (authUser.role === "org_admin" && parseResult.data.organizationId && parseResult.data.organizationId !== authUser.organizationId) {
-      return reply.status(403).send(buildError("FORBIDDEN", "Cannot move users outside your organization"));
+    if (authUser.role === "org_admin") {
+      const targetOrgId = await getUserOrgId(userId);
+      if (!targetOrgId || targetOrgId !== authUser.organizationId) {
+        return reply.status(403).send(buildError("FORBIDDEN", "Cannot edit users outside your organization"));
+      }
+    }
+
+    if (authUser.role === "org_admin" && parseResult.data.organizationId !== undefined) {
+      return reply.status(403).send(buildError("FORBIDDEN", "Organization changes not allowed"));
     }
 
     if (parseResult.data.roleId) {
@@ -158,6 +176,13 @@ export async function registerUserRoutes(app: FastifyInstance) {
     const userId = Number.parseInt((request.params as any).id, 10);
     if (Number.isNaN(userId)) {
       return reply.status(400).send(buildError("INVALID_REQUEST", "Invalid user id"));
+    }
+
+    if (request.authUser!.role === "org_admin") {
+      const targetOrgId = await getUserOrgId(userId);
+      if (!targetOrgId || targetOrgId !== request.authUser!.organizationId) {
+        return reply.status(403).send(buildError("FORBIDDEN", "Cannot archive users outside your organization"));
+      }
     }
     const statusIdRows = await query<{ id: number }[]>("SELECT id FROM user_statuses WHERE name = 'archived'");
     const statusId = statusIdRows[0]?.id;

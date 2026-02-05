@@ -22,6 +22,15 @@ function getClientIp(request: FastifyRequest): string {
   return request.ip;
 }
 
+function computeHeaderBytes(headers: Record<string, string>): number {
+  let total = 0;
+  for (const [key, value] of Object.entries(headers)) {
+    total += Buffer.byteLength(`${key}: ${value}\r\n`);
+  }
+  total += 2;
+  return total;
+}
+
 async function getUserRecord(userId: number): Promise<UserRecord | null> {
   const rows = await query<UserRecord[]>(
     "SELECT u.id, u.organization_id, r.name as role, s.name as status FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE u.id = ?",
@@ -136,6 +145,7 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
       status,
       requestBytes: Number.parseInt(String(request.headers["content-length"] ?? 0), 10) || 0,
       responseBytes: Buffer.byteLength(responseBody),
+      responseHeaderBytes: 0,
       durationMs: Date.now() - start,
       clientIp: getClientIp(request),
       denyReasonCode: decision.reason!.code,
@@ -196,6 +206,8 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
 
     reply.raw.writeHead(upstreamResponse.status, upstreamHeaders);
 
+    const responseHeaderBytes = computeHeaderBytes(upstreamHeaders);
+
     let responseBytes = 0;
     if (upstreamResponse.body) {
       const nodeStream = Readable.fromWeb(upstreamResponse.body as any);
@@ -216,6 +228,7 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
       status: upstreamResponse.status,
       requestBytes,
       responseBytes,
+      responseHeaderBytes,
       durationMs: Date.now() - start,
       clientIp: getClientIp(request),
       denyReasonCode: null,
@@ -234,6 +247,7 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
       status: 502,
       requestBytes,
       responseBytes: Buffer.byteLength(JSON.stringify(errorPayload)),
+      responseHeaderBytes: 0,
       durationMs: Date.now() - start,
       clientIp: getClientIp(request),
       denyReasonCode: "UPSTREAM_ERROR",

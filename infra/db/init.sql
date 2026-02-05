@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
   status INT NOT NULL,
   request_bytes INT NOT NULL,
   response_bytes INT NOT NULL,
+  response_header_bytes INT NOT NULL DEFAULT 0,
   duration_ms INT NOT NULL,
   client_ip VARCHAR(64) NOT NULL,
   deny_reason_id INT NULL,

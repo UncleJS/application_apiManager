@@ -20,8 +20,62 @@ podman-compose -f "$COMPOSE_FILE" down
 podman pod rm -f "$POD_NAME" || true
 
 if [ "$PURGE" = "true" ]; then
-  podman volume rm -f api-manager-db-data api-manager-tls api-manager-jwt || true
-  echo "Volumes removed"
+  removed_any="false"
+  for volume in \
+    api-manager-db-data \
+    api-manager-tls \
+    api-manager-jwt \
+    infra_api-manager-db-data \
+    infra_api-manager-tls \
+    infra_api-manager-jwt; do
+    if ! podman volume exists "$volume"; then
+      continue
+    fi
+
+    in_use_by="$(podman ps -a --filter volume="$volume" --format "{{.Names}}" | tr '\n' ' ' | xargs)"
+    if [ -n "$in_use_by" ]; then
+      echo "Skipping volume $volume (in use by: $in_use_by)"
+      continue
+    fi
+
+    pods_in_use="$(podman ps -a --filter volume="$volume" --format "{{.PodName}}" | sort -u)"
+    for pod in $pods_in_use; do
+      if [ -z "$pod" ] || [ "$pod" != "$POD_NAME" ]; then
+        echo "Skipping volume $volume (used by pod: ${pod:-none})"
+        continue 2
+      fi
+    done
+
+    project_label="$(podman volume inspect "$volume" --format '{{.Labels.com.docker.compose.project}}' 2>/dev/null || true)"
+    if [ "$project_label" = "<no value>" ] || [ "$project_label" = "null" ]; then
+      project_label=""
+    fi
+
+    if [ -n "$project_label" ] && [ "$project_label" != "infra" ]; then
+      echo "Skipping volume $volume (owned by compose project: $project_label)"
+      continue
+    fi
+
+    if [ -z "$project_label" ]; then
+      case "$volume" in
+        infra_api-manager-*|api-manager-*)
+          ;;
+        *)
+          echo "Skipping volume $volume (missing compose label)"
+          continue
+          ;;
+      esac
+    fi
+
+    podman volume rm -f "$volume" >/dev/null 2>&1 || true
+    removed_any="true"
+  done
+
+  if [ "$removed_any" = "true" ]; then
+    echo "Volumes removed"
+  else
+    echo "No volumes removed"
+  fi
 else
   echo "Volumes preserved (use --purge to remove)"
 fi

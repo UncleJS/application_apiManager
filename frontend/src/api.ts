@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://localhost:55001";
+let inMemoryToken: string | null = null;
 
 export type ApiError = {
   code: string;
@@ -7,15 +8,32 @@ export type ApiError = {
 };
 
 export function setToken(token: string) {
-  localStorage.setItem("api-manager-token", token);
+  inMemoryToken = token;
+  try {
+    localStorage.setItem("api-manager-token", token);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem("api-manager-token");
+  if (inMemoryToken) {
+    return inMemoryToken;
+  }
+  try {
+    return localStorage.getItem("api-manager-token");
+  } catch {
+    return null;
+  }
 }
 
 export function clearToken() {
-  localStorage.removeItem("api-manager-token");
+  inMemoryToken = null;
+  try {
+    localStorage.removeItem("api-manager-token");
+  } catch {
+    // ignore storage failures
+  }
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -38,6 +56,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const payload = contentType.includes("application/json") ? await response.json() : null;
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+    }
     throw payload || { code: "REQUEST_FAILED", message: "Request failed" };
   }
 
@@ -129,20 +150,34 @@ export async function archiveWindow(id: number) {
   return request(`/windows/${id}/archive`, { method: "POST" });
 }
 
-export async function getOrgWeeklyReport() {
-  return request("/reports/orgs/weekly");
+function buildRangeQuery(range?: { from?: string; to?: string }) {
+  if (!range?.from && !range?.to) {
+    return "";
+  }
+  const params = new URLSearchParams();
+  if (range.from) {
+    params.set("from", range.from);
+  }
+  if (range.to) {
+    params.set("to", range.to);
+  }
+  return `?${params.toString()}`;
 }
 
-export async function getOrgMonthlyReport() {
-  return request("/reports/orgs/monthly");
+export async function getOrgWeeklyReport(range?: { from?: string; to?: string }) {
+  return request(`/reports/orgs/weekly${buildRangeQuery(range)}`);
 }
 
-export async function getUserWeeklyReport() {
-  return request("/reports/users/weekly");
+export async function getOrgMonthlyReport(range?: { from?: string; to?: string }) {
+  return request(`/reports/orgs/monthly${buildRangeQuery(range)}`);
 }
 
-export async function getUserMonthlyReport() {
-  return request("/reports/users/monthly");
+export async function getUserWeeklyReport(range?: { from?: string; to?: string }) {
+  return request(`/reports/users/weekly${buildRangeQuery(range)}`);
+}
+
+export async function getUserMonthlyReport(range?: { from?: string; to?: string }) {
+  return request(`/reports/users/monthly${buildRangeQuery(range)}`);
 }
 
 export async function getLookups() {

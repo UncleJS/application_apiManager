@@ -2,6 +2,9 @@ import { FastifyInstance } from "fastify";
 import { DateTime } from "luxon";
 import { query } from "../db";
 import { toUtcSql } from "../utils/datetime";
+import { buildError } from "../utils/errors";
+
+const REPORT_TZ = "Africa/Johannesburg";
 
 function getWeekRange(now: DateTime) {
   const start = now.startOf("week");
@@ -15,6 +18,55 @@ function getMonthRange(now: DateTime) {
   return { start, end };
 }
 
+function parseDate(value: string, boundary: "start" | "end"): DateTime | null {
+  const parsed = DateTime.fromISO(value, { zone: REPORT_TZ });
+  if (!parsed.isValid) {
+    return null;
+  }
+  if (!value.includes("T")) {
+    return boundary === "start" ? parsed.startOf("day") : parsed.endOf("day");
+  }
+  return parsed;
+}
+
+function resolveRange(query: any, fallback: { start: DateTime; end: DateTime }) {
+  const fromRaw = typeof query?.from === "string" ? query.from : undefined;
+  const toRaw = typeof query?.to === "string" ? query.to : undefined;
+
+  let start = fallback.start;
+  let end = fallback.end;
+
+  if (fromRaw) {
+    const parsed = parseDate(fromRaw, "start");
+    if (!parsed) {
+      return { error: buildError("INVALID_REQUEST", "Invalid from date") };
+    }
+    start = parsed;
+  }
+
+  if (toRaw) {
+    const parsed = parseDate(toRaw, "end");
+    if (!parsed) {
+      return { error: buildError("INVALID_REQUEST", "Invalid to date") };
+    }
+    end = parsed;
+  }
+
+  if (fromRaw && !toRaw) {
+    end = DateTime.now().setZone(REPORT_TZ);
+  }
+
+  if (toRaw && !fromRaw) {
+    start = end.startOf("day");
+  }
+
+  if (start > end) {
+    return { error: buildError("INVALID_REQUEST", "from must be before to") };
+  }
+
+  return { start, end };
+}
+
 function normalizeRow(row: any) {
   return {
     ...row,
@@ -25,10 +77,13 @@ function normalizeRow(row: any) {
     total_count: Number(row.total_count),
     request_bytes_allowed: Number(row.request_bytes_allowed),
     response_bytes_allowed: Number(row.response_bytes_allowed),
+    response_header_bytes_allowed: Number(row.response_header_bytes_allowed),
     request_bytes_denied: Number(row.request_bytes_denied),
     response_bytes_denied: Number(row.response_bytes_denied),
+    response_header_bytes_denied: Number(row.response_header_bytes_denied),
     request_bytes_total: Number(row.request_bytes_total),
-    response_bytes_total: Number(row.response_bytes_total)
+    response_bytes_total: Number(row.response_bytes_total),
+    response_header_bytes_total: Number(row.response_header_bytes_total)
   };
 }
 
@@ -41,10 +96,13 @@ function withTotals(rows: any[]) {
       acc.total_count += row.total_count;
       acc.request_bytes_allowed += row.request_bytes_allowed;
       acc.response_bytes_allowed += row.response_bytes_allowed;
+      acc.response_header_bytes_allowed += row.response_header_bytes_allowed;
       acc.request_bytes_denied += row.request_bytes_denied;
       acc.response_bytes_denied += row.response_bytes_denied;
+      acc.response_header_bytes_denied += row.response_header_bytes_denied;
       acc.request_bytes_total += row.request_bytes_total;
       acc.response_bytes_total += row.response_bytes_total;
+      acc.response_header_bytes_total += row.response_header_bytes_total;
       return acc;
     },
     {
@@ -53,33 +111,46 @@ function withTotals(rows: any[]) {
       total_count: 0,
       request_bytes_allowed: 0,
       response_bytes_allowed: 0,
+      response_header_bytes_allowed: 0,
       request_bytes_denied: 0,
       response_bytes_denied: 0,
+      response_header_bytes_denied: 0,
       request_bytes_total: 0,
-      response_bytes_total: 0
+      response_bytes_total: 0,
+      response_header_bytes_total: 0
     }
   );
 
   return {
     items: normalized.map((row) => ({
       ...row,
-      total_bytes_allowed: row.request_bytes_allowed + row.response_bytes_allowed,
-      total_bytes_denied: row.request_bytes_denied + row.response_bytes_denied,
-      total_bytes_total: row.request_bytes_total + row.response_bytes_total
+      total_bytes_allowed:
+        row.request_bytes_allowed + row.response_bytes_allowed + row.response_header_bytes_allowed,
+      total_bytes_denied:
+        row.request_bytes_denied + row.response_bytes_denied + row.response_header_bytes_denied,
+      total_bytes_total:
+        row.request_bytes_total + row.response_bytes_total + row.response_header_bytes_total
     })),
     totals: {
       ...totals,
-      total_bytes_allowed: totals.request_bytes_allowed + totals.response_bytes_allowed,
-      total_bytes_denied: totals.request_bytes_denied + totals.response_bytes_denied,
-      total_bytes_total: totals.request_bytes_total + totals.response_bytes_total
+      total_bytes_allowed:
+        totals.request_bytes_allowed + totals.response_bytes_allowed + totals.response_header_bytes_allowed,
+      total_bytes_denied:
+        totals.request_bytes_denied + totals.response_bytes_denied + totals.response_header_bytes_denied,
+      total_bytes_total:
+        totals.request_bytes_total + totals.response_bytes_total + totals.response_header_bytes_total
     }
   };
 }
 
 export async function registerReportRoutes(app: FastifyInstance) {
   app.get("/reports/orgs/weekly", async (request, reply) => {
-    const now = DateTime.now().setZone("Africa/Johannesburg");
-    const { start, end } = getWeekRange(now);
+    const now = DateTime.now().setZone(REPORT_TZ);
+    const range = resolveRange(request.query, getWeekRange(now));
+    if (range.error) {
+      return reply.status(400).send(range.error);
+    }
+    const { start, end } = range;
     const authUser = request.authUser!;
 
     const rows = await query(
@@ -89,10 +160,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
         "COUNT(*) as total_count, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.request_bytes ELSE 0 END) as request_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_bytes ELSE 0 END) as response_bytes_allowed, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.request_bytes ELSE 0 END) as request_bytes_denied, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_bytes ELSE 0 END) as response_bytes_denied, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_denied, " +
         "SUM(l.request_bytes) as request_bytes_total, " +
-        "SUM(l.response_bytes) as response_bytes_total " +
+        "SUM(l.response_bytes) as response_bytes_total, " +
+        "SUM(l.response_header_bytes) as response_header_bytes_total " +
         "FROM access_logs l JOIN organizations o ON l.organization_id = o.id " +
         "WHERE l.created_at_utc BETWEEN ? AND ? " +
         "AND (? = 'global_admin' OR l.organization_id = ?) " +
@@ -100,12 +174,16 @@ export async function registerReportRoutes(app: FastifyInstance) {
       [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId]
     );
 
-    return reply.send(withTotals(rows));
+    return reply.send({ range: { start: toUtcSql(start), end: toUtcSql(end) }, ...withTotals(rows) });
   });
 
   app.get("/reports/orgs/monthly", async (request, reply) => {
-    const now = DateTime.now().setZone("Africa/Johannesburg");
-    const { start, end } = getMonthRange(now);
+    const now = DateTime.now().setZone(REPORT_TZ);
+    const range = resolveRange(request.query, getMonthRange(now));
+    if (range.error) {
+      return reply.status(400).send(range.error);
+    }
+    const { start, end } = range;
     const authUser = request.authUser!;
 
     const rows = await query(
@@ -115,10 +193,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
         "COUNT(*) as total_count, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.request_bytes ELSE 0 END) as request_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_bytes ELSE 0 END) as response_bytes_allowed, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.request_bytes ELSE 0 END) as request_bytes_denied, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_bytes ELSE 0 END) as response_bytes_denied, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_denied, " +
         "SUM(l.request_bytes) as request_bytes_total, " +
-        "SUM(l.response_bytes) as response_bytes_total " +
+        "SUM(l.response_bytes) as response_bytes_total, " +
+        "SUM(l.response_header_bytes) as response_header_bytes_total " +
         "FROM access_logs l JOIN organizations o ON l.organization_id = o.id " +
         "WHERE l.created_at_utc BETWEEN ? AND ? " +
         "AND (? = 'global_admin' OR l.organization_id = ?) " +
@@ -126,12 +207,16 @@ export async function registerReportRoutes(app: FastifyInstance) {
       [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId]
     );
 
-    return reply.send(withTotals(rows));
+    return reply.send({ range: { start: toUtcSql(start), end: toUtcSql(end) }, ...withTotals(rows) });
   });
 
   app.get("/reports/users/weekly", async (request, reply) => {
-    const now = DateTime.now().setZone("Africa/Johannesburg");
-    const { start, end } = getWeekRange(now);
+    const now = DateTime.now().setZone(REPORT_TZ);
+    const range = resolveRange(request.query, getWeekRange(now));
+    if (range.error) {
+      return reply.status(400).send(range.error);
+    }
+    const { start, end } = range;
     const authUser = request.authUser!;
 
     const rows = await query(
@@ -141,10 +226,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
         "COUNT(*) as total_count, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.request_bytes ELSE 0 END) as request_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_bytes ELSE 0 END) as response_bytes_allowed, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.request_bytes ELSE 0 END) as request_bytes_denied, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_bytes ELSE 0 END) as response_bytes_denied, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_denied, " +
         "SUM(l.request_bytes) as request_bytes_total, " +
-        "SUM(l.response_bytes) as response_bytes_total " +
+        "SUM(l.response_bytes) as response_bytes_total, " +
+        "SUM(l.response_header_bytes) as response_header_bytes_total " +
         "FROM access_logs l JOIN users u ON l.user_id = u.id " +
         "WHERE l.created_at_utc BETWEEN ? AND ? " +
         "AND (? = 'global_admin' OR u.organization_id = ?) " +
@@ -152,12 +240,16 @@ export async function registerReportRoutes(app: FastifyInstance) {
       [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId]
     );
 
-    return reply.send(withTotals(rows));
+    return reply.send({ range: { start: toUtcSql(start), end: toUtcSql(end) }, ...withTotals(rows) });
   });
 
   app.get("/reports/users/monthly", async (request, reply) => {
-    const now = DateTime.now().setZone("Africa/Johannesburg");
-    const { start, end } = getMonthRange(now);
+    const now = DateTime.now().setZone(REPORT_TZ);
+    const range = resolveRange(request.query, getMonthRange(now));
+    if (range.error) {
+      return reply.status(400).send(range.error);
+    }
+    const { start, end } = range;
     const authUser = request.authUser!;
 
     const rows = await query(
@@ -167,10 +259,13 @@ export async function registerReportRoutes(app: FastifyInstance) {
         "COUNT(*) as total_count, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.request_bytes ELSE 0 END) as request_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_bytes ELSE 0 END) as response_bytes_allowed, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_allowed, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.request_bytes ELSE 0 END) as request_bytes_denied, " +
         "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_bytes ELSE 0 END) as response_bytes_denied, " +
+        "SUM(CASE WHEN l.deny_reason_id IS NOT NULL THEN l.response_header_bytes ELSE 0 END) as response_header_bytes_denied, " +
         "SUM(l.request_bytes) as request_bytes_total, " +
-        "SUM(l.response_bytes) as response_bytes_total " +
+        "SUM(l.response_bytes) as response_bytes_total, " +
+        "SUM(l.response_header_bytes) as response_header_bytes_total " +
         "FROM access_logs l JOIN users u ON l.user_id = u.id " +
         "WHERE l.created_at_utc BETWEEN ? AND ? " +
         "AND (? = 'global_admin' OR u.organization_id = ?) " +
@@ -178,6 +273,6 @@ export async function registerReportRoutes(app: FastifyInstance) {
       [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId]
     );
 
-    return reply.send(withTotals(rows));
+    return reply.send({ range: { start: toUtcSql(start), end: toUtcSql(end) }, ...withTotals(rows) });
   });
 }
