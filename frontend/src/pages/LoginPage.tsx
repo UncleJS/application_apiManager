@@ -22,7 +22,9 @@ export default function LoginPage({ onLogin }: Props) {
     } catch (err: any) {
       const message = err?.message ?? "Login failed";
       if (message.includes("Failed to fetch")) {
-        setError("TLS certificate not trusted. Visit https://localhost:55001 and accept it, then retry.");
+        setError(
+          "Login failed. Ensure https://localhost:55001 is trusted and CORS_ORIGIN is https://localhost:55000, then retry."
+        );
         return;
       }
       setError(message);
@@ -38,11 +40,16 @@ export default function LoginPage({ onLogin }: Props) {
           <div className="form-row">
             <div>
               <label>Username</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input value={username} autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
             </div>
             <div>
               <label>Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input
+                type="password"
+                value={password}
+                autoComplete="current-password"
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
           </div>
           {error && <p className="tag">{error}</p>}

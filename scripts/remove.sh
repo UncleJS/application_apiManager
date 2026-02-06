@@ -31,11 +31,19 @@ if [ "$PURGE" = "true" ]; then
     api-manager-db-data \
     api-manager-tls \
     api-manager-jwt \
+    api-manager-caddy-data \
+    api-manager-caddy-config \
+    api-manager-frontend-data \
+    api-manager-frontend-config \
     api-manager-phpmyadmin-data \
     api-manager-phpmyadmin-config \
     infra_api-manager-db-data \
     infra_api-manager-tls \
     infra_api-manager-jwt \
+    infra_api-manager-caddy-data \
+    infra_api-manager-caddy-config \
+    infra_api-manager-frontend-data \
+    infra_api-manager-frontend-config \
     infra_api-manager-phpmyadmin-data \
     infra_api-manager-phpmyadmin-config; do
     if ! podman volume exists "$volume"; then

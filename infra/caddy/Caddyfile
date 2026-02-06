@@ -1,0 +1,9 @@
+https://localhost:55000 {
+  reverse_proxy frontend:55000
+  tls internal
+}
+
+https://localhost:55002 {
+  reverse_proxy phpmyadmin:80
+  tls internal
+}

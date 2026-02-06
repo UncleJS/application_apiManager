@@ -4,11 +4,14 @@ import {
   createUser,
   getLookups,
   getOrgs,
+  getSessions,
   getUsers,
+  revokeSession,
   updateUser
 } from "../api";
 import PermissionsEditor from "../components/PermissionsEditor";
 import WindowsEditor from "../components/WindowsEditor";
+import { formatSast, getSessionStatus } from "../utils/time";
 
 type Props = {
   role: string;
@@ -22,8 +25,13 @@ export default function UsersPage({ role, organizationId }: Props) {
   const [statuses, setStatuses] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState({ username: "", password: "", organizationId, roleId: 0 });
+  const [sessions, setSessions] = useState<any[]>([]);
 
   const selectedUser = useMemo(() => users.find((user) => user.id === selectedId), [users, selectedId]);
+  const activeSessions = useMemo(
+    () => sessions.filter((session) => getSessionStatus(session) === "Active"),
+    [sessions]
+  );
 
   const load = async () => {
     const [userData, lookupData] = await Promise.all([getUsers(), getLookups()]);
@@ -47,6 +55,17 @@ export default function UsersPage({ role, organizationId }: Props) {
     load();
   }, []);
 
+  const loadSessions = async (userId: number) => {
+    const data = await getSessions({ userId });
+    setSessions(data.items);
+  };
+
+  useEffect(() => {
+    if (selectedUser) {
+      loadSessions(selectedUser.id);
+    }
+  }, [selectedUser]);
+
   const handleCreate = async () => {
     if (!form.username || !form.password || !form.organizationId || !form.roleId) {
       return;
@@ -64,6 +83,13 @@ export default function UsersPage({ role, organizationId }: Props) {
   const handleUpdate = async (id: number, payload: any) => {
     await updateUser(id, payload);
     await load();
+  };
+
+  const handleRevokeSession = async (sessionId: number) => {
+    await revokeSession(sessionId);
+    if (selectedUser) {
+      await loadSessions(selectedUser.id);
+    }
   };
 
   return (
@@ -183,6 +209,50 @@ export default function UsersPage({ role, organizationId }: Props) {
           {role !== "global_admin" && selectedUser.role_name !== "global_admin" && (
             <WindowsEditor subjectType="user" subjectId={selectedUser.id} />
           )}
+          <div className="card">
+            <h3>Active sessions</h3>
+            <div className="form-row">
+              <div>
+                <label>&nbsp;</label>
+                <button className="secondary" onClick={() => loadSessions(selectedUser.id)}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Last activity (SAST)</th>
+                  <th>Expires (SAST)</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeSessions.map((session) => (
+                  <tr key={session.id}>
+                    <td>{formatSast(session.last_activity_utc)}</td>
+                    <td>{formatSast(session.expires_at_utc)}</td>
+                    <td>{getSessionStatus(session)}</td>
+                    <td>
+                      {getSessionStatus(session) === "Active" && (
+                        <button className="secondary" onClick={() => handleRevokeSession(session.id)}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {activeSessions.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="muted">
+                      No active sessions
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

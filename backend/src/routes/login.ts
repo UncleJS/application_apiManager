@@ -51,9 +51,9 @@ function renderLoginPage(params: { error?: string; returnTo?: string }) {
       <form method="post" action="/login">
         ${returnToInput}
         <label>Username</label>
-        <input name="username" required />
+        <input name="username" autocomplete="username" required />
         <label>Password</label>
-        <input name="password" type="password" required />
+        <input name="password" type="password" autocomplete="current-password" required />
         <button type="submit">Sign in</button>
       </form>
     </div>
@@ -122,7 +122,7 @@ export async function registerLoginRoutes(app: FastifyInstance) {
     const cookie = buildCookie(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: true,
-      sameSite: "Lax",
+      sameSite: "None",
       path: "/",
       maxAgeSeconds: config.sessionHardMaxSeconds
     });
@@ -139,7 +139,7 @@ export async function registerLoginRoutes(app: FastifyInstance) {
     const cookie = buildCookie(SESSION_COOKIE, "", {
       httpOnly: true,
       secure: true,
-      sameSite: "Lax",
+      sameSite: "None",
       path: "/",
       maxAgeSeconds: 0
     });

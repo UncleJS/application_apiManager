@@ -11,6 +11,13 @@ export type AuthUser = {
   username?: string;
 };
 
+function normalizeRole(role: string | null | undefined): string {
+  if (!role) {
+    return "";
+  }
+  return role.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 declare module "fastify" {
   interface FastifyRequest {
     authUser?: AuthUser;
@@ -45,7 +52,7 @@ export function authenticate() {
           buildCookie(SESSION_COOKIE, "", {
             httpOnly: true,
             secure: true,
-            sameSite: "Lax",
+            sameSite: "None",
             path: "/",
             maxAgeSeconds: 0
           })
@@ -57,7 +64,7 @@ export function authenticate() {
     await touchSession(session.session_id);
     request.authUser = {
       id: session.user_id,
-      role: session.role,
+      role: normalizeRole(session.role),
       organizationId: session.organization_id,
       username: session.username
     };

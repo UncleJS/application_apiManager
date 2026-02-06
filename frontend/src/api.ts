@@ -156,3 +156,19 @@ export async function getUserMonthlyReport(range?: { from?: string; to?: string 
 export async function getLookups() {
   return request<{ roles: any[]; userStatuses: any[]; orgStatuses: any[] }>("/lookups");
 }
+
+export async function getSessions(options?: { userId?: number; orgId?: number }) {
+  const params = new URLSearchParams();
+  if (options?.userId) {
+    params.set("userId", String(options.userId));
+  }
+  if (options?.orgId) {
+    params.set("orgId", String(options.orgId));
+  }
+  const query = params.toString();
+  return request<{ items: any[] }>(`/sessions${query ? `?${query}` : ""}`);
+}
+
+export async function revokeSession(sessionId: number) {
+  return request(`/sessions/${sessionId}/revoke`, { method: "POST" });
+}

@@ -11,6 +11,7 @@ import { registerPermissionRoutes } from "./routes/permissions";
 import { registerWindowRoutes } from "./routes/windows";
 import { registerReportRoutes } from "./routes/reports";
 import { registerLookupRoutes } from "./routes/lookups";
+import { registerSessionRoutes } from "./routes/sessions";
 import { authenticate } from "./middleware/authenticate";
 import { requireRole } from "./middleware/requireRole";
 import { handleProxy } from "./proxy";
@@ -89,6 +90,11 @@ export async function buildServer() {
     protectedRoutes.register(async (reportRoutes) => {
       reportRoutes.addHook("preHandler", requireRole(["global_admin", "org_admin"]));
       await registerReportRoutes(reportRoutes);
+    });
+
+    protectedRoutes.register(async (sessionRoutes) => {
+      sessionRoutes.addHook("preHandler", requireRole(["global_admin", "org_admin"]));
+      await registerSessionRoutes(sessionRoutes);
     });
 
     protectedRoutes.register(async (lookupRoutes) => {

@@ -8,7 +8,6 @@ import { config } from "../config";
 import { createSession, revokeSessionByToken, SESSION_COOKIE } from "../sessions";
 import { parseCookies } from "../utils/cookies";
 import { authenticate } from "../middleware/authenticate";
-import { revokeSessionByToken } from "../sessions";
 
 const loginSchema = z.object({
   username: z.string().min(1),
@@ -58,7 +57,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       buildCookie(SESSION_COOKIE, token, {
         httpOnly: true,
         secure: true,
-        sameSite: "Lax",
+        sameSite: "None",
         path: "/",
         maxAgeSeconds: config.sessionHardMaxSeconds
       })
@@ -85,7 +84,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       buildCookie(SESSION_COOKIE, "", {
         httpOnly: true,
         secure: true,
-        sameSite: "Lax",
+        sameSite: "None",
         path: "/",
         maxAgeSeconds: 0
       })

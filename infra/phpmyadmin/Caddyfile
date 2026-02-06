@@ -1,4 +1,0 @@
-https://localhost {
-  reverse_proxy phpmyadmin:80
-  tls internal
-}

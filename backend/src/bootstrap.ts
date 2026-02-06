@@ -65,6 +65,38 @@ export async function ensureBootstrapAdmin(globalOrgId: number): Promise<void> {
     return;
   }
 
+  const existingByUsername = await query<{ id: number; role_id: number; status_id: number; organization_id: number }[]>(
+    "SELECT id, role_id, status_id, organization_id FROM users WHERE username = ?",
+    ["global-admin"]
+  );
+
+  if (existingByUsername && existingByUsername.length > 0) {
+    const user = existingByUsername[0];
+    const updates: string[] = [];
+    const params: Array<number | string> = [];
+
+    if (user.role_id !== roleId) {
+      updates.push("role_id = ?");
+      params.push(roleId);
+    }
+    if (user.status_id !== statusId) {
+      updates.push("status_id = ?");
+      params.push(statusId);
+    }
+    if (user.organization_id !== globalOrgId) {
+      updates.push("organization_id = ?");
+      params.push(globalOrgId);
+    }
+
+    if (updates.length > 0) {
+      updates.push("updated_at_utc = ?");
+      params.push(nowUtc());
+      params.push(user.id);
+      await query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, params);
+    }
+    return;
+  }
+
   const passwordHash = await hashPassword(config.bootstrapPassword);
   const now = nowUtc();
   await query(

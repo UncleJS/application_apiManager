@@ -5,6 +5,7 @@ import OrgsPage from "./pages/OrgsPage";
 import UsersPage from "./pages/UsersPage";
 import ApisPage from "./pages/ApisPage";
 import ReportsPage from "./pages/ReportsPage";
+import SessionsPage from "./pages/SessionsPage";
 import { getMe, logout } from "./api";
 
 export default function App() {
@@ -13,6 +14,12 @@ export default function App() {
   const navigate = useNavigate();
 
   const displayName = identity?.username ? identity.username : identity ? `User ${identity.id}` : "";
+  const rawRole = identity?.role ?? identity?.role_name ?? identity?.roleName ?? identity?.role?.name ?? "";
+  const role = String(rawRole)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const organizationId = identity?.organizationId ?? identity?.organization_id ?? 0;
 
   const loadIdentity = async () => {
     try {
@@ -65,10 +72,13 @@ export default function App() {
         <div className="brand">API Manager</div>
         {displayName && <div className="muted user-info">Signed in as {displayName}</div>}
         <nav className="nav">
-          {identity.role === "global_admin" && <NavLink to="/orgs">Organizations</NavLink>}
+          {role === "global_admin" && <NavLink to="/orgs">Organizations</NavLink>}
           <NavLink to="/users">Users</NavLink>
           <NavLink to="/apis">APIs</NavLink>
           <NavLink to="/reports">Reports</NavLink>
+          {(role === "global_admin" || role === "org_admin") && (
+            <NavLink to="/sessions">Sessions</NavLink>
+          )}
           <button className="secondary" onClick={handleLogout}>
             Sign out
           </button>
@@ -76,11 +86,14 @@ export default function App() {
       </aside>
       <main className="content">
         <Routes>
-          {identity.role === "global_admin" && <Route path="/orgs" element={<OrgsPage />} />}
-          <Route path="/users" element={<UsersPage role={identity.role} organizationId={identity.organizationId} />} />
-          <Route path="/apis" element={<ApisPage role={identity.role} organizationId={identity.organizationId} />} />
+          {role === "global_admin" && <Route path="/orgs" element={<OrgsPage />} />}
+          <Route path="/users" element={<UsersPage role={role} organizationId={organizationId} />} />
+          <Route path="/apis" element={<ApisPage role={role} organizationId={organizationId} />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="*" element={<ApisPage role={identity.role} organizationId={identity.organizationId} />} />
+          {(role === "global_admin" || role === "org_admin") && (
+            <Route path="/sessions" element={<SessionsPage role={role} organizationId={organizationId} />} />
+          )}
+          <Route path="*" element={<ApisPage role={role} organizationId={organizationId} />} />
         </Routes>
       </main>
     </div>

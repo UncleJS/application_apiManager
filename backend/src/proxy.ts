@@ -165,7 +165,7 @@ export async function handleProxy(request: FastifyRequest, reply: FastifyReply) 
           buildCookie(SESSION_COOKIE, "", {
             httpOnly: true,
             secure: true,
-            sameSite: "Lax",
+            sameSite: "None",
             path: "/",
             maxAgeSeconds: 0
           })

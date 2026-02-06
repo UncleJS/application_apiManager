@@ -15,15 +15,20 @@
 
 Notes:
 - The backend uses a self-signed cert; your browser will show a warning.
+- The frontend and phpMyAdmin are served over HTTPS with a self-signed cert via Caddy.
 - Visit `https://localhost:55001` once and accept the cert so the frontend can call the API.
 - `https://localhost:55001/healthz` returns a simple health response.
-- phpMyAdmin is served over HTTPS via an internal proxy and uses a self-signed cert.
 - MariaDB has no host port; it is only reachable inside the pod.
 
 ## Sessions
 - Browser sessions use an HTTP-only cookie (`api_manager_session`).
 - API clients use `Authorization: Bearer <sessionToken>` from `/auth/login`.
 - Idle timeout: 60 minutes. Hard max: 180 minutes.
+
+API client usage:
+- `POST /auth/login` with JSON `{ "username": "...", "password": "..." }`
+- Response includes `{ "sessionToken": "..." }`
+- Send `Authorization: Bearer <sessionToken>` on each request
 
 ## Health checks
 Container healthchecks are configured in `infra/podman-compose.yml` for:
@@ -82,6 +87,7 @@ Backend (set in `infra/podman-compose.yml`):
 - `SEED_DATA` (default false)
 - `SEED_ACCESS_LOGS` (default false)
 - `CORS_ORIGIN` (default http://localhost:55000)
+- When using HTTPS frontend, set `CORS_ORIGIN=https://localhost:55000`.
 - `DB_WAIT_RETRIES` (default 60)
 - `DB_WAIT_DELAY_MS` (default 2000)
 - `SESSION_IDLE_SECONDS` (default 3600)

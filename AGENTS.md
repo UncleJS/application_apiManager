@@ -8,7 +8,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - React + Vite frontend in `frontend/`.
 - Podman Compose + DB init SQL in `infra/`.
 - Scripts in `scripts/`.
-- phpMyAdmin served over HTTPS via Caddy (`infra/phpmyadmin/Caddyfile`).
+- Frontend and phpMyAdmin served over HTTPS via Caddy (`infra/caddy/Caddyfile`).
 - Auth uses DB-backed sessions with cookie `api_manager_session`.
 - No Cursor or Copilot rules were found (`.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`).
 
@@ -178,7 +178,7 @@ If guidance here conflicts with existing project conventions, follow the project
 
 # Data / Time Conventions
 ·	Database stores UTC timestamps.
-·	Frontend displays SAST.
+·	Frontend displays SAST in YYYY-MM-DD HH:mm.
 ·	Never store local time in DB.
 ·	Access logs include response header bytes (response_header_bytes).
 ·	Frontend date inputs use YYYY-MM-DD format.
