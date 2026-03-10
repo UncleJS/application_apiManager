@@ -5,6 +5,15 @@ import { buildCookie, parseCookies } from "../utils/cookies";
 import { config } from "../config";
 import { createSession, revokeSessionByToken, SESSION_COOKIE } from "../sessions";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function isSafeReturnTo(value: string | undefined): value is string {
   if (!value) {
     return false;
@@ -22,10 +31,10 @@ function isSafeReturnTo(value: string | undefined): value is string {
 }
 
 function renderLoginPage(params: { error?: string; returnTo?: string }) {
-  const errorBlock = params.error
-    ? `<p style="color:#f6c453;font-weight:600;">${params.error}</p>`
+  const errorBlock = params.error ? `<p style="color:#f6c453;font-weight:600;">${escapeHtml(params.error)}</p>` : "";
+  const returnToInput = params.returnTo
+    ? `<input type="hidden" name="returnTo" value="${escapeHtml(params.returnTo)}" />`
     : "";
-  const returnToInput = params.returnTo ? `<input type="hidden" name="returnTo" value="${params.returnTo}" />` : "";
 
   return `<!doctype html>
 <html lang="en">

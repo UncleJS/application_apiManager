@@ -82,8 +82,14 @@ export async function isWithinWindows(subjectType: "user" | "api", subjectId: nu
 
 export async function getMatchingApi(pathname: string): Promise<ApiDefinition | null> {
   const rows = await query<ApiDefinition[]>(
-    "SELECT * FROM api_definitions WHERE ? LIKE CONCAT(base_path, '%') ORDER BY LENGTH(base_path) DESC LIMIT 1",
-    [pathname]
+    `SELECT *
+     FROM api_definitions
+     WHERE (base_path = '/' AND ? LIKE '/%')
+       OR ? = base_path
+       OR ? LIKE CONCAT(base_path, '/%')
+     ORDER BY LENGTH(base_path) DESC
+     LIMIT 1`,
+    [pathname, pathname, pathname]
   );
   if (!rows || rows.length === 0) {
     return null;

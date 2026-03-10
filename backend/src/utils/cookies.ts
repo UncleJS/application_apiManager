@@ -1,3 +1,11 @@
+function decodeCookieValue(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -14,7 +22,7 @@ export function parseCookies(cookieHeader?: string): Record<string, string> {
     if (!key) {
       continue;
     }
-    cookies[key] = decodeURIComponent(value);
+    cookies[key] = decodeCookieValue(value);
   }
   return cookies;
 }
@@ -39,7 +47,7 @@ export function buildCookie(name: string, value: string, options: {
   if (options.sameSite) {
     parts.push(`SameSite=${options.sameSite}`);
   }
-  if (options.maxAgeSeconds) {
+  if (options.maxAgeSeconds !== undefined) {
     parts.push(`Max-Age=${options.maxAgeSeconds}`);
   }
   return parts.join("; ");
