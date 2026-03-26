@@ -70,8 +70,13 @@ if [ "$PURGE" = "true" ]; then
   if [ "$confirm" = "YES" ]; then
     for vol in api-manager-db api-manager-tls api-manager-jwt api-manager-caddy-config api-manager-caddy-data api-manager-dev; do
       if podman volume inspect "$vol" >/dev/null 2>&1; then
-        podman volume rm "$vol"
-        green "  removed volume $vol"
+        if podman volume rm --force "$vol" 2>/dev/null; then
+          green "  removed volume $vol"
+        else
+          red "  FAILED to remove volume $vol (still in use?)"
+        fi
+      else
+        yellow "  volume $vol not found, skipping"
       fi
     done
   else
