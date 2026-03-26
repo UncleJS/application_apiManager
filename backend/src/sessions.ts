@@ -1,6 +1,6 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { DateTime } from "luxon";
-import { query } from "./db";
+import { query } from "./db/index";
 import { nowUtc, toUtcSql } from "./utils/datetime";
 
 export const SESSION_COOKIE = "api_manager_session";
@@ -72,7 +72,7 @@ export async function revokeSessionByToken(token: string): Promise<void> {
   await query("UPDATE sessions SET revoked_at_utc = ? WHERE session_token_hash = ?", [nowUtc(), tokenHash]);
 }
 
-export function isSessionExpired(session: SessionUser, idleSeconds: number, hardMaxSeconds: number): boolean {
+export function isSessionExpired(session: SessionUser, idleSeconds: number, _hardMaxSeconds: number): boolean {
   if (session.revoked_at_utc) {
     return true;
   }

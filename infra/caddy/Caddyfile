@@ -1,9 +1,21 @@
+{
+  auto_https disable_redirects
+}
+
 https://localhost:55000 {
-  reverse_proxy frontend:55000
+  reverse_proxy 127.0.0.1:3000
+  tls internal
+}
+
+https://localhost:55001 {
+  reverse_proxy 127.0.0.1:55001 {
+    header_up Host {host}
+    header_up X-Forwarded-Proto https
+  }
   tls internal
 }
 
 https://localhost:55002 {
-  reverse_proxy phpmyadmin:80
+  reverse_proxy 127.0.0.1:80
   tls internal
 }

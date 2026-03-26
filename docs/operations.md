@@ -1,11 +1,11 @@
 # Operations Guide
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-![Runtime](https://img.shields.io/badge/runtime-Node.js%20%2B%20React-3c873a)
-![Infra](https://img.shields.io/badge/infra-Podman%20Compose-892CA0)
+![Runtime](https://img.shields.io/badge/runtime-Bun%20%2B%20Next.js-f59e0b)
+![Infra](https://img.shields.io/badge/infra-Podman%20Quadlet-892CA0)
 
 ## Table of Contents
-- [Quickstart (Podman Compose)](#quickstart-podman-compose)
+- [Quickstart (Podman Quadlet)](#quickstart-podman-quadlet)
 - [Sessions](#sessions)
 - [Health checks](#health-checks)
 - [Seed data (dev/test)](#seed-data-devtest)
@@ -20,14 +20,10 @@
 - [TLS](#tls)
 - [Footer](#footer)
 
-## Quickstart (Podman Compose)
-1. Build images:
-   - `scripts/build.sh`
-2. Start services (creates pod if missing):
-   - `scripts/setup.sh`
-   - If you created the pod before updating scripts, run `scripts/remove.sh` and rerun setup.
-3. After code changes, use:
-   - `scripts/rebuild.sh`
+## Quickstart (Podman Quadlet)
+1. Copy `.env.example` to `.env`.
+2. Run `scripts/install.sh`.
+3. After code changes, use `scripts/rebuild.sh`.
 4. Open the UI:
    - Frontend: `https://localhost:55000`
    - Backend (API + proxy): `https://localhost:55001`
@@ -44,18 +40,18 @@ Notes:
 
 ## Sessions
 - Browser sessions use an HTTP-only cookie (`api_manager_session`).
-- API clients use `Authorization: Bearer <sessionToken>` from `/auth/login`.
+- API clients can use `Authorization: Bearer <token>` with the issued session token.
 - Idle timeout: 60 minutes. Hard max: 180 minutes.
 
 API client usage:
 - `POST /auth/login` with JSON `{ "username": "...", "password": "..." }`
-- Response includes `{ "sessionToken": "..." }`
-- Send `Authorization: Bearer <sessionToken>` on each request
+- Response sets the auth cookie and returns `{ "ok": true }`
+- If you use bearer auth, send the session token in `Authorization: Bearer <token>`
 
 [Go to TOC](#table-of-contents)
 
 ## Health checks
-Container healthchecks are configured in `infra/podman-compose.yml` for:
+Container healthchecks are configured in Quadlet container units for:
 - MariaDB (ping)
 - Backend (HTTPS `/healthz`)
 - Frontend (HTTP root)
@@ -64,10 +60,10 @@ Container healthchecks are configured in `infra/podman-compose.yml` for:
 
 ## Seed data (dev/test)
 Enable dev/test seed data on startup:
-- `SEED_DATA=true scripts/setup.sh`
+- `SEED_DATA=true scripts/install.sh`
 
 Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
-- `SEED_DATA=true SEED_ACCESS_LOGS=true scripts/setup.sh`
+- `SEED_DATA=true SEED_ACCESS_LOGS=true scripts/install.sh`
 - This can take a few minutes; progress logs print every 10k rows.
 - If access logs already exist, setup skips access log seeding.
 
@@ -75,7 +71,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## Default admin (dev/test)
 - Username: `global-admin`
-- Password: `001002..Ad`
+- Password is taken from `BOOTSTRAP_ADMIN_PASSWORD` and must not be left at a placeholder value.
 
 [Go to TOC](#table-of-contents)
 
@@ -87,18 +83,18 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 [Go to TOC](#table-of-contents)
 
 ## Rebuild / remove
-### build.sh vs rebuild.sh
-- `scripts/build.sh` builds images only; running containers keep using the old image.
-- `scripts/rebuild.sh` stops containers, rebuilds images, and starts services again.
-- Use `build.sh` when you want images ready but will restart later.
-- Use `rebuild.sh` when you need code changes to take effect immediately.
+### install.sh vs rebuild.sh
+- `scripts/install.sh` installs Quadlet units, copies the env file, builds images, starts services, waits for DB, runs migrations, and optionally seeds.
+- `scripts/rebuild.sh` rebuilds backend and/or frontend images and restarts those services.
+- Use `scripts/rebuild.sh` when you need code changes to take effect immediately.
 - Neither script removes volumes or deletes data.
 
 [Go to TOC](#table-of-contents)
 
 - Rebuild containers: `scripts/rebuild.sh`
-- Remove containers (keep volumes): `scripts/remove.sh`
-- Remove containers + volumes: `scripts/remove.sh --purge`
+- Stop services: `scripts/stop.sh`
+- Remove containers (keep volumes): `scripts/uninstall.sh`
+- Remove containers + volumes: `scripts/uninstall.sh --purge`
 - Only removes volumes not in use and only used by `api-manager-pod`.
 - If compose labels are missing, it only removes volumes whose names start with `infra_api-manager-` or `api-manager-`.
 
@@ -108,33 +104,32 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 Create a `.env` file at repo root (see `.env.example`).
 Scripts load `.env` automatically, even when run from `scripts/`.
 
-Backend (set in `infra/podman-compose.yml`):
+Backend:
 - `PORT` (default `55001`)
 - `DB_HOST` (default `127.0.0.1`)
 - `DB_PORT` (default `3306`)
 - `DB_USER` (default `api_manager`)
 - `DB_PASSWORD` (default `api_manager_password`)
 - `DB_DATABASE` (default `api_manager`)
-- `JWT_SECRET_PATH` (default `/data/jwt/secret`)
 - `TLS_CERT_PATH` (default `/data/tls/cert.pem`)
 - `TLS_KEY_PATH` (default `/data/tls/key.pem`)
 - `BOOTSTRAP_ADMIN` (default `true`)
-- `BOOTSTRAP_ADMIN_PASSWORD` (default `001002..Ad`)
+- `BOOTSTRAP_ADMIN_PASSWORD` (must be non-default when bootstrap admin is enabled)
 - `SEED_DATA` (default `false`)
 - `SEED_ACCESS_LOGS` (default `false`)
-- `CORS_ORIGIN` (default `http://localhost:55000`)
-- When using HTTPS frontend, set `CORS_ORIGIN=https://localhost:55000`.
+- `CORS_ORIGIN` (default `https://localhost:55000`)
 - `DB_WAIT_RETRIES` (default `60`)
 - `DB_WAIT_DELAY_MS` (default `2000`)
 - `SESSION_IDLE_SECONDS` (default `3600`)
 - `SESSION_HARD_MAX_SECONDS` (default `10800`)
+- `PROXY_MAX_REQUEST_BYTES`, `PROXY_MAX_RESPONSE_BYTES`
 
 Setup script:
 - `DB_ROOT_PASSWORD` (default `root_password`)
 - `DB_HOST` (default `127.0.0.1`)
 
 Frontend:
-- `VITE_API_BASE_URL` (default `https://localhost:55001`)
+- `NEXT_PUBLIC_API_URL` (default `https://localhost:55001`)
 
 [Go to TOC](#table-of-contents)
 
@@ -155,8 +150,8 @@ Browser login flow:
 - After successful login, the user is redirected back to the original URL.
 
 API client login flow:
-- `POST /auth/login` returns `{ sessionToken }`.
-- Send `Authorization: Bearer <sessionToken>` on each request.
+- `POST /auth/login` returns `{ ok: true }` and sets the auth cookie.
+- Bearer-token clients can still send `Authorization: Bearer <token>`.
 
 Example 1 (simple passthrough):
 - `base_path`: `/acme/orders`
@@ -175,20 +170,9 @@ Example 3 (public API, no auth):
 curl -k https://localhost:55001/global/public/ping
 ```
 
-Example 4 (restricted API, bearer token required):
-```bash
-TOKEN=$(curl -k -s https://localhost:55001/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"global-admin","password":"001002..Ad"}' | \
-  python - <<'PY'
-import json, sys
-print(json.load(sys.stdin)["sessionToken"])
-PY
-)
-
-curl -k https://localhost:55001/acme/orders/123 \
-  -H "Authorization: Bearer $TOKEN"
-```
+Example 4 (restricted API):
+- Browser clients use the auth cookie set by `/auth/login`.
+- Bearer-token clients must use a valid issued session token; the login JSON response no longer includes it.
 
 Notes:
 - The API must be enabled and within its allowed hours (unless global admin).

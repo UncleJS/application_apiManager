@@ -1,0 +1,17 @@
+# Exclude build artifacts and local state from COPY context
+node_modules
+backend/node_modules
+frontend/node_modules
+.git
+dist
+backend/dist
+frontend/dist
+.next
+frontend/.next
+out
+node-compile-cache
+coverage
+*.log
+*.lock
+.env
+.DS_Store

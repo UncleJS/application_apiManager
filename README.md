@@ -3,16 +3,16 @@
 API gateway and admin console for managing proxied APIs with org-level access control, session auth, and usage reporting.
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-![Backend](https://img.shields.io/badge/backend-Node.js%20%2B%20TypeScript-43853D)
-![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB)
-![Infra](https://img.shields.io/badge/infra-Podman%20Compose-892CA0)
+![Backend](https://img.shields.io/badge/backend-Bun%20%2B%20Elysia%20%2B%20Drizzle-f472b6)
+![Frontend](https://img.shields.io/badge/frontend-Next.js%2014%20%2B%20Tailwind-61DAFB)
+![Infra](https://img.shields.io/badge/infra-Podman%20Quadlet-892CA0)
 
 ## Table of Contents
 - [Overview](#overview)
 - [Key Features](#key-features)
 - [Repository Structure](#repository-structure)
 - [Requirements](#requirements)
-- [Quickstart (Podman Compose)](#quickstart-podman-compose)
+- [Quickstart](#quickstart)
 - [Local Development](#local-development)
 - [Environment Variables](#environment-variables)
 - [Ports](#ports)
@@ -23,16 +23,17 @@ API gateway and admin console for managing proxied APIs with org-level access co
 
 ## Overview
 This project includes:
-- A backend reverse proxy and admin API (`backend/`) built with Fastify + TypeScript.
-- A React admin UI (`frontend/`) for orgs, users, APIs, permissions, windows, reports, and active sessions.
-- Podman Compose infrastructure (`infra/`) with MariaDB, backend, frontend, phpMyAdmin, and Caddy for HTTPS edge serving.
+- A backend reverse proxy and admin API (`backend/`) built with **Bun + Elysia + Drizzle ORM** (TypeScript).
+- A **Next.js 14 App Router** admin UI (`frontend/`) with Tailwind high-contrast dark theme for orgs, users, APIs, permissions, windows, reports, and active sessions.
+- Rootless **Podman + systemd Quadlet** infrastructure (`.quadlet/`) with MariaDB, backend, frontend, phpMyAdmin, and Caddy for HTTPS edge serving.
+- OpenAPI spec at `/openapi.json`; Swagger UI at `/docs`.
 
 [Go to TOC](#table-of-contents)
 
 ## Key Features
 - Longest-prefix reverse proxy routing from `base_path` to `target_url`.
 - Role-based access control (`global_admin`, `org_admin`, `user`).
-- DB-backed sessions with cookie `api_manager_session` and bearer token support (`sessionToken`).
+- DB-backed sessions with cookie `api_manager_session` and bearer token support using the same session token.
 - Time-window access constraints for APIs and users.
 - Access and audit logging with report endpoints.
 - Archive/unarchive workflow (no delete endpoints).
@@ -40,67 +41,67 @@ This project includes:
 [Go to TOC](#table-of-contents)
 
 ## Repository Structure
-- `backend/`: Node.js + TypeScript Fastify API/proxy
-- `frontend/`: React admin UI
-- `infra/`: Podman Compose + DB init
-- `scripts/`: setup/build/rebuild/remove helpers
-- `docs/`: plan and operations guides
+- `backend/`: Bun + Elysia + Drizzle ORM API/proxy
+- `frontend/`: Next.js 14 App Router admin UI
+- `.quadlet/`: Podman Quadlet pod/volume/container units (systemd user services)
+- `infra/`: DB reference SQL and Caddyfile template (reference only)
+- `scripts/`: install/start/stop/rebuild/uninstall/dev/logs/seed helpers
+- `docs/`: operations and plan guides
+- `Containerfile.dev`: UBI10-minimal dev container with Bun
 
 [Go to TOC](#table-of-contents)
 
 ## Requirements
-- Node.js 20+
-- npm
-- Podman + `podman-compose` (for containerized setup)
+- Podman (rootless) + `systemd --user` (RHEL 10 / Fedora recommended)
+- Project runtimes run in containers; host commands are limited to Podman/systemd helper scripts.
 
 [Go to TOC](#table-of-contents)
 
-## Quickstart (Podman Compose)
+## Quickstart
 1. Copy env template:
 ```bash
 cp .env.example .env
+# edit .env — set MARIADB_* and review generated/bootstrap values
 ```
-2. Build images:
+2. Install Quadlet units, create volumes, seed Caddy config, enable linger, start pod:
 ```bash
-scripts/build.sh
+scripts/install.sh
 ```
-3. Start services and initialize DB:
-```bash
-scripts/setup.sh
-```
-4. Open:
-- Frontend: `https://localhost:55000`
-- Backend: `https://localhost:55001`
-- phpMyAdmin: `https://localhost:55002`
+3. Open:
+   - Frontend: `https://localhost:55000`
+   - Backend API / Swagger: `https://localhost:55001/docs`
+   - phpMyAdmin: `https://localhost:55002`
 
 Notes:
 - Certificates are self-signed; browser warnings are expected.
 - Visit `https://localhost:55001` once and accept the cert so the frontend can call the backend.
-- After code changes in container mode, use `scripts/rebuild.sh`.
-- To stop/remove: `scripts/remove.sh` (`--purge` also removes volumes when safe).
+- After code changes, use `scripts/rebuild.sh` to rebuild images and restart.
+- To stop: `scripts/stop.sh`
+- To remove: `scripts/uninstall.sh` (`--purge` also removes volumes when safe).
 
 [Go to TOC](#table-of-contents)
 
 ## Local Development
-Backend:
+All project runtimes run inside the dev container. Build/start it with:
 ```bash
-cd backend
-npm install
-npm run dev
+scripts/dev.sh
 ```
 
-Frontend:
+Then run commands inside the container:
 ```bash
-cd frontend
-npm install
-npm run dev
+# Backend
+podman exec -it api-manager-dev sh -lc 'cd /workspace/backend && bun run dev'
+
+# Frontend
+podman exec -it api-manager-dev sh -lc 'cd /workspace/frontend && bun run dev'
 ```
 
-Common commands:
-- Backend build: `cd backend && npm run build`
-- Backend lint: `cd backend && npm run lint`
-- Frontend build: `cd frontend && npm run build`
-- Frontend lint: `cd frontend && npm run lint`
+Common commands (run inside container):
+- Backend build: `bun run build` (from `backend/`)
+- Backend lint: `bun run lint` (from `backend/`)
+- Frontend build: `bun run build` (from `frontend/`)
+- Frontend lint: `bun run lint` (from `frontend/`)
+- Seed DB: `bun run seed` (from `backend/`)
 
 [Go to TOC](#table-of-contents)
 
@@ -108,8 +109,9 @@ Common commands:
 Set env in root `.env` (see `.env.example`).
 
 Important values:
-- `MARIADB_*` and `DB_ROOT_PASSWORD` for database bootstrap.
-- `VITE_API_BASE_URL=https://localhost:55001`
+- `MARIADB_DATABASE`, `MARIADB_USER`, `MARIADB_PASSWORD`, `DB_ROOT_PASSWORD` — database credentials.
+- `BOOTSTRAP_ADMIN_PASSWORD` — required non-default bootstrap admin password; helper scripts now auto-generate one if the file still uses a placeholder.
+- `NEXT_PUBLIC_API_URL=https://localhost:55001`
 - `CORS_ORIGIN=https://localhost:55000`
 - `SESSION_IDLE_SECONDS`, `SESSION_HARD_MAX_SECONDS`
 - `SEED_DATA`, `SEED_ACCESS_LOGS`
@@ -118,7 +120,7 @@ Important values:
 
 ## Ports
 - `55000` frontend (via Caddy HTTPS)
-- `55001` backend HTTPS
+- `55001` backend HTTPS (Elysia + Caddy)
 - `55002` phpMyAdmin (via Caddy HTTPS)
 - MariaDB is internal-only in the pod
 
@@ -126,8 +128,9 @@ Important values:
 
 ## Authentication
 - Browser/admin sessions: secure HTTP-only cookie `api_manager_session`.
-- API clients: `POST /auth/login` with username/password, then send `Authorization: Bearer <sessionToken>`.
-- Default seeded admin (when seeding is enabled): `global-admin` / `001002..Ad`.
+- API clients: `POST /auth/login` with username/password, then send `Authorization: Bearer <token>` using the issued session token.
+- `POST /auth/login` now returns `{ ok: true }` and sets the auth cookie; it no longer echoes the session token in the JSON body.
+- Seeded/default passwords must be set to non-placeholder values before use.
 
 [Go to TOC](#table-of-contents)
 
@@ -139,8 +142,7 @@ Important values:
 [Go to TOC](#table-of-contents)
 
 ## Current Gaps
-- No automated tests are configured yet.
-- Existing lint debt remains in backend/frontend and is not fully cleaned.
+- Containerized stack validation depends on a valid local `.env`; helper scripts now normalize required aliases, but a real non-placeholder database/root password policy is still recommended.
 
 [Go to TOC](#table-of-contents)
 

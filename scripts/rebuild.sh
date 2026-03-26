@@ -1,32 +1,44 @@
 #!/usr/bin/env bash
+# rebuild.sh — rebuild backend and/or frontend images and restart containers.
+# Usage:
+#   scripts/rebuild.sh            # rebuild both
+#   scripts/rebuild.sh backend    # rebuild backend only
+#   scripts/rebuild.sh frontend   # rebuild frontend only
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/infra/podman-compose.yml"
-POD_NAME="api-manager-pod"
-ENV_FILE="$ROOT_DIR/.env"
-ENV_ARGS=()
+TARGET="${1:-both}"
 
-if [ -f "$ENV_FILE" ]; then
-  ENV_ARGS=(--env-file "$ENV_FILE")
-fi
+green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
+step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 
-if ! command -v podman-compose >/dev/null 2>&1; then
-  echo "podman-compose not found" >&2
-  exit 1
-fi
+rebuild_backend() {
+  step "Building api-manager-backend:latest"
+  podman build -f "$ROOT_DIR/backend/Containerfile" -t api-manager-backend:latest "$ROOT_DIR/backend"
+  step "Restarting api-manager-backend"
+  systemctl --user start api-manager-pod-pod.service >/dev/null 2>&1 || true
+  systemctl --user restart api-manager-backend.service
+  green "  Backend rebuilt and restarted"
+}
 
-podman-compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" down
+rebuild_frontend() {
+  step "Building api-manager-frontend:latest"
+  podman build -f "$ROOT_DIR/frontend/Containerfile" -t api-manager-frontend:latest "$ROOT_DIR/frontend"
+  step "Restarting api-manager-frontend"
+  systemctl --user start api-manager-pod-pod.service >/dev/null 2>&1 || true
+  systemctl --user restart api-manager-frontend.service
+  green "  Frontend rebuilt and restarted"
+}
 
-if ! podman pod exists "$POD_NAME"; then
-  podman pod create --name "$POD_NAME" --share net
-fi
+case "$TARGET" in
+  backend)  rebuild_backend  ;;
+  frontend) rebuild_frontend ;;
+  both)     rebuild_backend; rebuild_frontend ;;
+  *)
+    printf 'Usage: %s [backend|frontend|both]\n' "$0" >&2
+    exit 1
+    ;;
+esac
 
-if [ "$(podman pod inspect "$POD_NAME" --format '{{.State}}')" != "Running" ]; then
-  podman pod start "$POD_NAME"
-fi
-
-podman-compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" build
-podman-compose "${ENV_ARGS[@]}" -f "$COMPOSE_FILE" up -d
-
-echo "Rebuild complete"
+green ""
+green "Rebuild complete."

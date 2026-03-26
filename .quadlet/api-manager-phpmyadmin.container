@@ -1,0 +1,20 @@
+[Unit]
+Description=API Manager - phpMyAdmin
+After=api-manager-mariadb.service
+Requires=api-manager-mariadb.service
+
+[Container]
+Image=docker.io/library/phpmyadmin:5.2
+ContainerName=api-manager-phpmyadmin
+Pod=api-manager-pod.pod
+Environment=PMA_HOST=127.0.0.1
+Environment=PMA_PORT=3306
+Environment=PMA_AUTH_TYPE=cookie
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

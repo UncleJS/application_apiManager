@@ -1,0 +1,16 @@
+[Unit]
+Description=API Manager - Dev Container
+After=api-manager-pod-pod.service
+
+[Container]
+Image=localhost/api-manager-dev:latest
+ContainerName=api-manager-dev
+Pod=api-manager-pod.pod
+EnvironmentFile=%h/.config/containers/systemd/api-manager.env
+
+[Install]
+WantedBy=default.target
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120

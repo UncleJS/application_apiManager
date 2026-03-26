@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { query } from "./db";
+import { query } from "./db/index";
 
 export type ApiDefinition = {
   id: number;
@@ -34,8 +34,8 @@ export function getNowSast(): DateTime {
 }
 
 function parseTimeToMinutes(time: string): number {
-  const [hour, minute, second] = time.split(":").map((value) => Number.parseInt(value, 10));
-  return hour * 60 + minute + (second >= 30 ? 1 : 0);
+  const [hour, minute] = time.split(":").map((value) => Number.parseInt(value, 10));
+  return hour * 60 + minute;
 }
 
 async function fetchWindows(subjectType: "user" | "api", subjectId: number) {
@@ -84,12 +84,11 @@ export async function getMatchingApi(pathname: string): Promise<ApiDefinition | 
   const rows = await query<ApiDefinition[]>(
     `SELECT *
      FROM api_definitions
-     WHERE (base_path = '/' AND ? LIKE '/%')
-       OR ? = base_path
+     WHERE ? = base_path
        OR ? LIKE CONCAT(base_path, '/%')
      ORDER BY LENGTH(base_path) DESC
      LIMIT 1`,
-    [pathname, pathname, pathname]
+    [pathname, pathname]
   );
   if (!rows || rows.length === 0) {
     return null;

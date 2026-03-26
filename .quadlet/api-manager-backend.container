@@ -1,0 +1,29 @@
+[Unit]
+Description=API Manager - Backend (Elysia/Bun)
+After=api-manager-mariadb.service
+Requires=api-manager-mariadb.service
+
+[Container]
+Image=localhost/api-manager-backend:latest
+ContainerName=api-manager-backend
+Pod=api-manager-pod.pod
+Volume=api-manager-tls.volume:/data/tls:Z
+EnvironmentFile=%h/.config/containers/systemd/api-manager.env
+Environment=PORT=55001
+Environment=HOST=0.0.0.0
+Environment=DB_HOST=127.0.0.1
+Environment=DB_PORT=3306
+Environment=TLS_CERT_PATH=/data/tls/cert.pem
+Environment=TLS_KEY_PATH=/data/tls/key.pem
+HealthCmd=sh -lc 'IP=$(hostname -i | awk "{print \$1}"); nc -z "$IP" 55001'
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=6
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

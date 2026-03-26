@@ -1,29 +1,13 @@
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import { spawnSync } from "child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const DEFAULT_CERT_PATH = "/data/tls/cert.pem";
 const DEFAULT_KEY_PATH = "/data/tls/key.pem";
-const DEFAULT_JWT_SECRET_PATH = "/data/jwt/secret";
 
 function ensureDir(filePath: string): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-}
-
-function generateJwtSecret(secretPath: string): string {
-  ensureDir(secretPath);
-  const secret = crypto.randomBytes(48).toString("hex");
-  fs.writeFileSync(secretPath, secret, { encoding: "utf-8", mode: 0o600 });
-  return secret;
-}
-
-export function getJwtSecret(secretPath: string): string {
-  if (fs.existsSync(secretPath)) {
-    return fs.readFileSync(secretPath, "utf-8").trim();
-  }
-  return generateJwtSecret(secretPath);
 }
 
 export function ensureTls(certPath: string, keyPath: string): void {
@@ -56,6 +40,19 @@ export function ensureTls(certPath: string, keyPath: string): void {
   }
 }
 
+function resolveBootstrapPassword(): string {
+  const configured = process.env.BOOTSTRAP_ADMIN_PASSWORD?.trim();
+  if (process.env.BOOTSTRAP_ADMIN === "false") {
+    return "";
+  }
+
+  if (!configured || configured === "001002..Ad" || configured === "change_me") {
+    throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be set to a non-default value when bootstrap admin is enabled");
+  }
+
+  return configured;
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   host: process.env.HOST ?? "0.0.0.0",
@@ -67,19 +64,17 @@ export const config = {
     password: process.env.DB_PASSWORD ?? "api_manager_password",
     database: process.env.DB_DATABASE ?? "api_manager"
   },
-  jwt: {
-    secretPath: process.env.JWT_SECRET_PATH ?? DEFAULT_JWT_SECRET_PATH,
-    expiresIn: process.env.JWT_EXPIRES_IN ?? "12h"
-  },
   tls: {
     certPath: process.env.TLS_CERT_PATH ?? DEFAULT_CERT_PATH,
     keyPath: process.env.TLS_KEY_PATH ?? DEFAULT_KEY_PATH
   },
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:55000",
+  corsOrigin: process.env.CORS_ORIGIN ?? "https://localhost:55000",
   seedData: process.env.SEED_DATA === "true",
   seedAccessLogs: process.env.SEED_ACCESS_LOGS === "true",
   bootstrapAdmin: process.env.BOOTSTRAP_ADMIN !== "false",
-  bootstrapPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "001002..Ad",
+  bootstrapPassword: resolveBootstrapPassword(),
   sessionIdleSeconds: Number.parseInt(process.env.SESSION_IDLE_SECONDS ?? "3600", 10),
-  sessionHardMaxSeconds: Number.parseInt(process.env.SESSION_HARD_MAX_SECONDS ?? "10800", 10)
+  sessionHardMaxSeconds: Number.parseInt(process.env.SESSION_HARD_MAX_SECONDS ?? "10800", 10),
+  proxyMaxRequestBytes: Number.parseInt(process.env.PROXY_MAX_REQUEST_BYTES ?? "10485760", 10),
+  proxyMaxResponseBytes: Number.parseInt(process.env.PROXY_MAX_RESPONSE_BYTES ?? "10485760", 10)
 };

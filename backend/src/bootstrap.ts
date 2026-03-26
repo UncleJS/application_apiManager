@@ -1,35 +1,54 @@
 import { config } from "./config";
 import { hashPassword } from "./auth";
-import { query } from "./db";
+import { db } from "./db/client";
+import { sql } from "drizzle-orm";
 import { seedDevData, seedAccessLogs } from "./scripts/seed";
 import { SAST_TZ } from "./access";
 import { nowUtc } from "./utils/datetime";
 
 const GLOBAL_ORG_NAME = "Global";
 
-async function getIdByName(table: string, name: string): Promise<number> {
-  const rows = await query<{ id: number }[]>(`SELECT id FROM ${table} WHERE name = ?`, [name]);
-  if (!rows || rows.length === 0) {
+const LOOKUP_TABLES = {
+  organization_statuses: "organization_statuses",
+  roles: "roles",
+  user_statuses: "user_statuses"
+} as const;
+
+async function getIdByName(table: keyof typeof LOOKUP_TABLES, name: string): Promise<number> {
+  let rows;
+
+  switch (table) {
+    case "organization_statuses":
+      rows = await db.execute(sql`SELECT id FROM organization_statuses WHERE name = ${name}`);
+      break;
+    case "roles":
+      rows = await db.execute(sql`SELECT id FROM roles WHERE name = ${name}`);
+      break;
+    case "user_statuses":
+      rows = await db.execute(sql`SELECT id FROM user_statuses WHERE name = ${name}`);
+      break;
+  }
+
+  const data = rows[0] as unknown as { id: number }[];
+  if (!data || data.length === 0) {
     throw new Error(`Missing ${table} row for ${name}`);
   }
-  return rows[0].id;
+  return data[0].id;
 }
 
 export async function ensureGlobalOrg(): Promise<number> {
   const statusId = await getIdByName("organization_statuses", "active");
-  const existing = await query<{ id: number }[]>("SELECT id FROM organizations WHERE name = ?", [GLOBAL_ORG_NAME]);
-  if (existing && existing.length > 0) {
-    return existing[0].id;
+  const existing = await db.execute(sql`SELECT id FROM organizations WHERE name = ${GLOBAL_ORG_NAME}`);
+  const existingData = existing[0] as unknown as { id: number }[];
+  if (existingData && existingData.length > 0) {
+    return existingData[0].id;
   }
-
   const now = nowUtc();
-  await query(
-    "INSERT INTO organizations (name, status_id, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?)",
-    [GLOBAL_ORG_NAME, statusId, now, now]
+  await db.execute(
+    sql`INSERT INTO organizations (name, status_id, created_at_utc, updated_at_utc) VALUES (${GLOBAL_ORG_NAME}, ${statusId}, ${now}, ${now})`
   );
-
-  const rows = await query<{ id: number }[]>("SELECT id FROM organizations WHERE name = ?", [GLOBAL_ORG_NAME]);
-  return rows[0].id;
+  const rows = await db.execute(sql`SELECT id FROM organizations WHERE name = ${GLOBAL_ORG_NAME}`);
+  return (rows[0] as unknown as { id: number }[])[0].id;
 }
 
 async function waitForDb(): Promise<void> {
@@ -37,7 +56,7 @@ async function waitForDb(): Promise<void> {
   const delayMs = Number.parseInt(process.env.DB_WAIT_DELAY_MS ?? "2000", 10);
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
-      await query("SELECT 1");
+      await db.execute(sql`SELECT 1`);
       return;
     } catch (error) {
       if (attempt === retries) {
@@ -56,52 +75,46 @@ export async function ensureBootstrapAdmin(globalOrgId: number): Promise<void> {
   const roleId = await getIdByName("roles", "global_admin");
   const statusId = await getIdByName("user_statuses", "active");
 
-  const existing = await query(
-    "SELECT u.id FROM users u JOIN roles r ON u.role_id = r.id WHERE r.name = ? LIMIT 1",
-    ["global_admin"]
+  const existing = await db.execute(
+    sql`SELECT u.id FROM users u JOIN roles r ON u.role_id = r.id WHERE r.name = 'global_admin' LIMIT 1`
   );
-
-  if (existing && existing.length > 0) {
+  const existingRows = existing[0] as unknown as { id: number }[];
+  if (existingRows.length > 0) {
     return;
   }
 
-  const existingByUsername = await query<{ id: number; role_id: number; status_id: number; organization_id: number }[]>(
-    "SELECT id, role_id, status_id, organization_id FROM users WHERE username = ?",
-    ["global-admin"]
+  const existingByUsername = await db.execute(
+    sql`SELECT id, role_id, status_id, organization_id FROM users WHERE username = 'global-admin'`
   );
+  const existingData = existingByUsername[0] as unknown as {
+    id: number;
+    role_id: number;
+    status_id: number;
+    organization_id: number;
+  }[];
 
-  if (existingByUsername && existingByUsername.length > 0) {
-    const user = existingByUsername[0];
+  if (existingData && existingData.length > 0) {
+    const user = existingData[0];
     const updates: string[] = [];
     const params: Array<number | string> = [];
 
-    if (user.role_id !== roleId) {
-      updates.push("role_id = ?");
-      params.push(roleId);
-    }
-    if (user.status_id !== statusId) {
-      updates.push("status_id = ?");
-      params.push(statusId);
-    }
-    if (user.organization_id !== globalOrgId) {
-      updates.push("organization_id = ?");
-      params.push(globalOrgId);
-    }
+    if (user.role_id !== roleId) { updates.push("role_id = ?"); params.push(roleId); }
+    if (user.status_id !== statusId) { updates.push("status_id = ?"); params.push(statusId); }
+    if (user.organization_id !== globalOrgId) { updates.push("organization_id = ?"); params.push(globalOrgId); }
 
     if (updates.length > 0) {
       updates.push("updated_at_utc = ?");
       params.push(nowUtc());
       params.push(user.id);
-      await query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, params);
+      await db.execute(sql.raw(`UPDATE users SET ${updates.join(", ")} WHERE id = ${user.id}`));
     }
     return;
   }
 
   const passwordHash = await hashPassword(config.bootstrapPassword);
   const now = nowUtc();
-  await query(
-    "INSERT INTO users (username, password_hash, organization_id, role_id, status_id, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ["global-admin", passwordHash, globalOrgId, roleId, statusId, now, now]
+  await db.execute(
+    sql`INSERT INTO users (username, password_hash, organization_id, role_id, status_id, created_at_utc, updated_at_utc) VALUES ('global-admin', ${passwordHash}, ${globalOrgId}, ${roleId}, ${statusId}, ${now}, ${now})`
   );
 }
 
