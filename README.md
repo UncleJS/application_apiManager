@@ -26,12 +26,14 @@ This project includes:
 - A backend reverse proxy and admin API (`backend/`) built with **Bun + Elysia + Drizzle ORM** (TypeScript).
 - A **Next.js 14 App Router** admin UI (`frontend/`) with Tailwind high-contrast dark theme for orgs, users, APIs, permissions, windows, reports, and active sessions.
 - Rootless **Podman + systemd Quadlet** infrastructure (`.quadlet/`) with MariaDB, backend, frontend, phpMyAdmin, and Caddy for HTTPS edge serving.
+- Caddy owns the public HTTPS ports; the backend runs on an internal-only HTTP port inside the pod.
 - OpenAPI spec at `/openapi.json`; Swagger UI at `/docs`.
 
 [Go to TOC](#table-of-contents)
 
 ## Key Features
 - Longest-prefix reverse proxy routing from `base_path` to `target_url`.
+- API `base_path` values are globally unique across all organisations.
 - Role-based access control (`global_admin`, `org_admin`, `user`).
 - DB-backed sessions with cookie `api_manager_session` and bearer token support using the same session token.
 - Time-window access constraints for APIs and users.
@@ -53,6 +55,7 @@ This project includes:
 
 ## Requirements
 - Podman (rootless) + `systemd --user` (RHEL 10 / Fedora recommended)
+- Python 3 available as `python3` or `python` for helper-script env normalization
 - Project runtimes run in containers; host commands are limited to Podman/systemd helper scripts.
 
 [Go to TOC](#table-of-contents)
@@ -131,6 +134,7 @@ Important values:
 - API clients: `POST /auth/login` with username/password, then send `Authorization: Bearer <token>` using the issued session token.
 - `POST /auth/login` now returns `{ ok: true }` and sets the auth cookie; it no longer echoes the session token in the JSON body.
 - Seeded/default passwords must be set to non-placeholder values before use.
+- Public HTTPS is terminated by Caddy; the backend itself is internal HTTP-only inside the pod.
 
 [Go to TOC](#table-of-contents)
 

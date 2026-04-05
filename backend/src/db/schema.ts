@@ -99,7 +99,8 @@ export const apiDefinitions = mysqlTable(
     updatedAtUtc: datetime("updated_at_utc").notNull()
   },
   (t) => ({
-    uqApiOrgPath: uniqueIndex("uq_api_org_path").on(t.organizationId, t.basePath)
+    idxApiOrg: index("idx_api_org").on(t.organizationId),
+    uqApiBasePath: uniqueIndex("uq_api_base_path").on(t.basePath)
   })
 );
 

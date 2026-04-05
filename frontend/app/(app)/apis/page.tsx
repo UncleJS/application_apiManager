@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   archiveApi, createApi, getApis, getOrgs, updateApi,
   type ApiRecord, type Org,
@@ -49,7 +49,10 @@ export default function ApisPage() {
     setLoading(true);
     setError("");
     try {
-      const [ad, od] = await Promise.all([getApis(), getOrgs()]);
+      const [ad, od] = await Promise.all([
+        getApis(),
+        role === "user" ? Promise.resolve({ items: [] as Org[] }) : getOrgs(),
+      ]);
       const visibleApis = role === "global_admin" ? ad.items : ad.items.filter((a) => a.organization_id === orgId);
       setApis(visibleApis);
       setOrgs(od.items);
@@ -168,8 +171,8 @@ export default function ApisPage() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No APIs found.</TableCell></TableRow>
               )}
               {apis.map((api) => (
-                <>
-                  <TableRow key={api.id}>
+                <Fragment key={api.id}>
+                  <TableRow>
                     <TableCell className="font-medium">{api.name}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{api.base_path}</TableCell>
                     <TableCell>{api.organization_name}</TableCell>
@@ -206,13 +209,13 @@ export default function ApisPage() {
                     </TableCell>
                   </TableRow>
                   {expandedId === api.id && (
-                    <TableRow key={"exp-" + api.id}>
+                    <TableRow>
                       <TableCell colSpan={6} className="bg-muted/20 p-4">
                         <WindowsEditor subjectType="api" subjectId={api.id} />
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               ))}
             </TableBody>
           </Table>

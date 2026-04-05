@@ -1,8 +1,7 @@
 import { Elysia } from "elysia";
 import { swagger } from "@elysiajs/swagger";
 import { cors } from "@elysiajs/cors";
-import fs from "fs";
-import { config, ensureTls } from "./config";
+import { config } from "./config";
 import { runBootstrap } from "./bootstrap";
 import { authPlugin } from "./routes/auth";
 import { orgsPlugin } from "./routes/orgs";
@@ -17,13 +16,13 @@ import { authenticatePlugin } from "./middleware/authenticate";
 import { handleProxy } from "./proxy";
 
 async function start() {
-  ensureTls(config.tls.certPath, config.tls.keyPath);
   await runBootstrap();
 
   const app = new Elysia()
     .use(
       swagger({
         path: "/docs",
+        specPath: "/openapi.json",
         documentation: {
           info: {
             title: "API Manager",
@@ -69,15 +68,11 @@ async function start() {
     .all("/*", handleProxy)
     .listen({
       port: config.port,
-      hostname: config.host,
-      tls: {
-        key: fs.readFileSync(config.tls.keyPath),
-        cert: fs.readFileSync(config.tls.certPath)
-      }
+      hostname: config.host
     });
 
-  console.log(`API Manager running at https://${config.host}:${config.port}`);
-  console.log(`Swagger UI: https://${config.host}:${config.port}/docs`);
+  console.log(`API Manager internal HTTP running at http://${config.host}:${config.port}`);
+  console.log("Public API/Swagger is expected via Caddy on https://localhost:55001");
 
   return app;
 }

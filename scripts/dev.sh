@@ -9,12 +9,13 @@ SYSTEMD_DIR="$HOME/.config/containers/systemd"
 QUADLET_SRC="$ROOT_DIR/.quadlet/api-manager-dev.container"
 ENV_FILE="$ROOT_DIR/.env"
 ENV_DEST="$SYSTEMD_DIR/api-manager.env"
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
 step() { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 
 normalize_env_file() {
-  python - "$1" <<'PY'
+  "$PYTHON_BIN" - "$1" <<'PY'
 from pathlib import Path
 import secrets, string, sys
 
@@ -68,6 +69,11 @@ PY
 }
 
 step "Preparing dev Quadlet unit"
+if [ -z "$PYTHON_BIN" ]; then
+  printf '\033[0;31m%s\033[0m\n' "ERROR: python3 (or python) not found. Helper scripts require Python 3 on the host."
+  exit 1
+fi
+
 mkdir -p "$SYSTEMD_DIR"
 if [ -f "$ENV_FILE" ]; then
   normalize_env_file "$ENV_FILE"

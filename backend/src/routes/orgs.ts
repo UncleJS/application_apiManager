@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { buildError } from "../utils/errors";
 import { logAudit } from "../logging";
 import { nowUtc } from "../utils/datetime";
+import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
@@ -30,12 +31,18 @@ export const orgsPlugin = new Elysia({ prefix: "/orgs" })
   .get("/", async (context) => {
     const { authUser, _authError, set } = context as unknown as ProtectedContext;
     if (!authUser) { set.status = 401; return _authError; }
-    const roleError = requireRole(["global_admin"])(authUser);
+    const roleError = requireRole(["global_admin", "org_admin"])(authUser);
     if (roleError) { set.status = roleError.status; return roleError.error; }
-    const rows = await db.execute(
-      sql`SELECT o.id, o.name, o.status_id, s.name as status_name, o.created_at_utc, o.updated_at_utc FROM organizations o JOIN organization_statuses s ON o.status_id = s.id`
-    );
-    return { items: rows[0] };
+
+    const rows = authUser.role === "global_admin"
+      ? await db.execute(
+        sql`SELECT o.id, o.name, o.status_id, s.name as status_name, o.created_at_utc, o.updated_at_utc FROM organizations o JOIN organization_statuses s ON o.status_id = s.id`
+      )
+      : await db.execute(
+        sql`SELECT o.id, o.name, o.status_id, s.name as status_name, o.created_at_utc, o.updated_at_utc FROM organizations o JOIN organization_statuses s ON o.status_id = s.id WHERE o.id = ${authUser.organizationId}`
+      );
+
+    return serializeUtcFields({ items: rows[0] });
   })
   .post(
     "/",

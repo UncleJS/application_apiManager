@@ -3,12 +3,12 @@
 }
 
 https://localhost:55000 {
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy api-manager-pod:3000
   tls internal
 }
 
 https://localhost:55001 {
-  reverse_proxy 127.0.0.1:55001 {
+  reverse_proxy 127.0.0.1:3001 {
     header_up Host {host}
     header_up X-Forwarded-Proto https
   }

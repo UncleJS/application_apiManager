@@ -5,6 +5,7 @@ import { hashPassword } from "../auth";
 import { buildError } from "../utils/errors";
 import { logAudit } from "../logging";
 import { nowUtc } from "../utils/datetime";
+import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
@@ -48,7 +49,7 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
     const rows = await db.execute(
       sql`SELECT u.id, u.username, u.organization_id, u.role_id, r.name as role_name, u.status_id, s.name as status_name, u.created_at_utc, u.updated_at_utc FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE ${authUser.role} = 'global_admin' OR u.organization_id = ${authUser.organizationId}`
     );
-    return { items: rows[0] };
+    return serializeUtcFields({ items: rows[0] });
   })
   .post(
     "/",
@@ -124,6 +125,13 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
           return buildError("FORBIDDEN", "Cannot edit users outside your organization");
         }
       }
+
+      const targetOrganizationId = body.organizationId ?? await getUserOrgId(userId);
+      if (!targetOrganizationId) {
+        set.status = 404;
+        return buildError("NOT_FOUND", "User not found");
+      }
+
       if (authUser.role === "org_admin" && body.organizationId !== undefined) {
         set.status = 403;
         return buildError("FORBIDDEN", "Organization changes not allowed");
@@ -154,7 +162,7 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
       await query(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`, values);
 
       await logAudit({
-        organizationId: authUser.organizationId,
+        organizationId: targetOrganizationId,
         userId: authUser.id,
         actionCode: "USER_UPDATE",
         entityName: "user",
@@ -182,9 +190,11 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
     const userId = Number.parseInt(params.id, 10);
     if (Number.isNaN(userId)) { set.status = 400; return buildError("INVALID_REQUEST", "Invalid user id"); }
 
+    const targetOrganizationId = await getUserOrgId(userId);
+    if (!targetOrganizationId) { set.status = 404; return buildError("NOT_FOUND", "User not found"); }
+
     if (authUser.role === "org_admin") {
-      const targetOrgId = await getUserOrgId(userId);
-      if (!targetOrgId || targetOrgId !== authUser.organizationId) {
+      if (targetOrganizationId !== authUser.organizationId) {
         set.status = 403;
         return buildError("FORBIDDEN", "Cannot archive users outside your organization");
       }
@@ -194,7 +204,7 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
     const now = nowUtc();
     await db.execute(sql`UPDATE users SET status_id = ${statusId}, updated_at_utc = ${now} WHERE id = ${userId}`);
     await logAudit({
-      organizationId: authUser.organizationId,
+      organizationId: targetOrganizationId,
       userId: authUser.id,
       actionCode: "USER_ARCHIVE",
       entityName: "user",

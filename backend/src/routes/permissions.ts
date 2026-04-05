@@ -72,7 +72,7 @@ export const permissionsPlugin = new Elysia({ prefix: "/permissions" })
         sql`INSERT IGNORE INTO user_api_permissions (user_id, api_id, created_at_utc) VALUES (${body.userId}, ${body.apiId}, ${now})`
       );
       await logAudit({
-        organizationId: authUser.organizationId,
+        organizationId: userOrgId,
         userId: authUser.id,
         actionCode: "PERMISSION_ASSIGN",
         entityName: "permission",
@@ -103,7 +103,7 @@ export const permissionsPlugin = new Elysia({ prefix: "/permissions" })
         sql`DELETE FROM user_api_permissions WHERE user_id = ${body.userId} AND api_id = ${body.apiId}`
       );
       await logAudit({
-        organizationId: authUser.organizationId,
+        organizationId: userOrgId,
         userId: authUser.id,
         actionCode: "PERMISSION_UNASSIGN",
         entityName: "permission",

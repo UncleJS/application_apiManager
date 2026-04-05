@@ -5,6 +5,7 @@ import { buildError } from "../utils/errors";
 import { isFiveMinuteIncrement, isValidTime } from "../utils/time";
 import { logAudit } from "../logging";
 import { nowUtc } from "../utils/datetime";
+import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import type { ResultSetHeader } from "mysql2/promise";
 import type { AuthUser } from "../middleware/authenticate";
@@ -97,7 +98,7 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
     const rows = await db.execute(
       sql`SELECT id, subject_type, subject_id, day_of_week, start_time, end_time, is_active, created_at_utc FROM access_windows WHERE subject_type = ${subjectType} AND subject_id = ${subjectId}`
     );
-    return { items: rows[0] };
+    return serializeUtcFields({ items: rows[0] });
   })
   .post(
     "/",

@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { buildError } from "../utils/errors";
 import { logAudit } from "../logging";
 import { nowUtc } from "../utils/datetime";
+import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { assertSafeTargetUrl } from "../utils/network";
 import { query, type QueryValue } from "../db/index";
@@ -55,6 +56,10 @@ async function getApiOrganizationId(apiId: number): Promise<number | null> {
   return data[0]?.organization_id ?? null;
 }
 
+function isDuplicateEntryError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
+}
+
 function validateBasePath(basePath: string): string | null {
   if (!basePath.startsWith("/")) {
     return "Base path must start with /";
@@ -79,18 +84,18 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
       const rows = await db.execute(
         sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id`
       );
-      return { items: rows[0] };
+      return serializeUtcFields({ items: rows[0] });
     }
     if (authUser.role === "org_admin") {
       const rows = await db.execute(
         sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id WHERE a.organization_id = ${authUser.organizationId}`
       );
-      return { items: rows[0] };
+      return serializeUtcFields({ items: rows[0] });
     }
     const rows = await db.execute(
       sql`SELECT DISTINCT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id LEFT JOIN user_api_permissions p ON a.id = p.api_id WHERE a.organization_id = ${authUser.organizationId} AND (a.is_public = 1 OR p.user_id = ${authUser.id})`
     );
-    return { items: rows[0] };
+    return serializeUtcFields({ items: rows[0] });
   })
   .post(
     "/",
@@ -114,9 +119,18 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
         return buildError("INVALID_REQUEST", safeTarget.message);
       }
       const now = nowUtc();
-      await db.execute(
-        sql`INSERT INTO api_definitions (organization_id, name, base_path, target_url, is_public, is_enabled, always_on, created_at_utc, updated_at_utc) VALUES (${body.organizationId}, ${body.name}, ${body.basePath}, ${body.targetUrl}, ${body.isPublic ? 1 : 0}, ${body.isEnabled === false ? 0 : 1}, ${body.alwaysOn ? 1 : 0}, ${now}, ${now})`
-      );
+      try {
+        await db.execute(
+          sql`INSERT INTO api_definitions (organization_id, name, base_path, target_url, is_public, is_enabled, always_on, created_at_utc, updated_at_utc) VALUES (${body.organizationId}, ${body.name}, ${body.basePath}, ${body.targetUrl}, ${body.isPublic ? 1 : 0}, ${body.isEnabled === false ? 0 : 1}, ${body.alwaysOn ? 1 : 0}, ${now}, ${now})`
+        );
+      } catch (error) {
+        if (isDuplicateEntryError(error)) {
+          set.status = 409;
+          return buildError("CONFLICT", "Base path already exists");
+        }
+        throw error;
+      }
+
       const created = await db.execute(
         sql`SELECT id FROM api_definitions WHERE organization_id = ${body.organizationId} AND base_path = ${body.basePath}`
       );
@@ -200,10 +214,18 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
       updates.push("updated_at_utc = ?");
       values.push(nowUtc());
       values.push(apiId);
-      await query(`UPDATE api_definitions SET ${updates.join(", ")} WHERE id = ?`, values);
+      try {
+        await query(`UPDATE api_definitions SET ${updates.join(", ")} WHERE id = ?`, values);
+      } catch (error) {
+        if (isDuplicateEntryError(error)) {
+          set.status = 409;
+          return buildError("CONFLICT", "Base path already exists");
+        }
+        throw error;
+      }
 
       await logAudit({
-        organizationId: authUser.organizationId,
+        organizationId: body.organizationId ?? targetOrgId,
         userId: authUser.id,
         actionCode: "API_UPDATE",
         entityName: "api",
@@ -241,7 +263,7 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
     const now = nowUtc();
     await db.execute(sql`UPDATE api_definitions SET is_enabled = 0, updated_at_utc = ${now} WHERE id = ${apiId}`);
     await logAudit({
-      organizationId: authUser.organizationId,
+      organizationId: targetOrgId,
       userId: authUser.id,
       actionCode: "API_ARCHIVE",
       entityName: "api",

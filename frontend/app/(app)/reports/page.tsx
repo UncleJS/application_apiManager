@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   getOrgMonthlyReport, getOrgWeeklyReport,
   getUserMonthlyReport, getUserWeeklyReport,
-  type ReportResult, type ReportRow,
+  type ReportResult,
 } from "@/lib/api";
 import {
   Button, Card, CardContent, CardHeader, CardTitle, Label, Tabs,
@@ -47,7 +47,6 @@ function fmtBytes(n: number | undefined): string {
 }
 
 function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "organization_name" | "username" }) {
-  const labelKey = nameKey === "organization_name" ? "week_label" : "week_label";
   return (
     <div className="space-y-2">
       {report.range.start && (
@@ -59,7 +58,6 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
         <TableHeader>
           <TableRow>
             <TableHead>{nameKey === "organization_name" ? "Organisation" : "User"}</TableHead>
-            <TableHead>Period</TableHead>
             <TableHead className="text-right">Allowed</TableHead>
             <TableHead className="text-right">Denied</TableHead>
             <TableHead className="text-right">Total</TableHead>
@@ -69,13 +67,12 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
         <TableBody>
           {report.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No data.</TableCell>
+              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No data.</TableCell>
             </TableRow>
           )}
           {report.items.map((row, i) => (
             <TableRow key={i}>
               <TableCell>{(row as Record<string, unknown>)[nameKey] as string ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{row.week_label ?? row.month_label ?? "—"}</TableCell>
               <TableCell className="text-right text-primary font-mono">{fmt(row.allowed_count)}</TableCell>
               <TableCell className="text-right text-red-400 font-mono">{fmt(row.denied_count)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(row.total_count)}</TableCell>
@@ -85,7 +82,7 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
           {/* Totals row */}
           {report.items.length > 0 && (
             <TableRow className="border-t-2 border-border bg-muted/30 font-semibold">
-              <TableCell colSpan={2} className="text-muted-foreground">Totals</TableCell>
+              <TableCell className="text-muted-foreground">Totals</TableCell>
               <TableCell className="text-right text-primary font-mono">{fmt(report.totals.allowed_count)}</TableCell>
               <TableCell className="text-right text-red-400 font-mono">{fmt(report.totals.denied_count)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(report.totals.total_count)}</TableCell>

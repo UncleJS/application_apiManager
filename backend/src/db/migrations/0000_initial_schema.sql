@@ -1,20 +1,25 @@
 CREATE DATABASE IF NOT EXISTS api_manager;
+--> statement-breakpoint
 USE api_manager;
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS roles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(50) NOT NULL UNIQUE
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS user_statuses (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(50) NOT NULL UNIQUE
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS organization_statuses (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(50) NOT NULL UNIQUE
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS organizations (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -24,6 +29,7 @@ CREATE TABLE IF NOT EXISTS organizations (
   updated_at_utc DATETIME NOT NULL,
   CONSTRAINT fk_org_status FOREIGN KEY (status_id) REFERENCES organization_statuses(id)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -38,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT fk_user_role FOREIGN KEY (role_id) REFERENCES roles(id),
   CONSTRAINT fk_user_status FOREIGN KEY (status_id) REFERENCES user_statuses(id)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS api_definitions (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,6 +60,7 @@ CREATE TABLE IF NOT EXISTS api_definitions (
   CONSTRAINT fk_api_org FOREIGN KEY (organization_id) REFERENCES organizations(id),
   UNIQUE KEY uq_api_org_path (organization_id, base_path)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS user_api_permissions (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,6 +71,7 @@ CREATE TABLE IF NOT EXISTS user_api_permissions (
   CONSTRAINT fk_perm_api FOREIGN KEY (api_id) REFERENCES api_definitions(id),
   UNIQUE KEY uq_user_api (user_id, api_id)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS access_windows (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -75,22 +84,26 @@ CREATE TABLE IF NOT EXISTS access_windows (
   created_at_utc DATETIME NOT NULL,
   INDEX idx_windows_subject (subject_type, subject_id)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS deny_reasons (
   id INT AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(80) NOT NULL UNIQUE,
   message VARCHAR(255) NOT NULL
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS audit_actions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(80) NOT NULL UNIQUE
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS audit_entities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(80) NOT NULL UNIQUE
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS access_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,6 +128,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
   INDEX idx_access_user_time (user_id, created_at_utc),
   INDEX idx_access_time (created_at_utc)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS sessions (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -131,6 +145,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   INDEX idx_session_user (user_id),
   INDEX idx_session_last_activity (last_activity_utc)
 );
+--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -145,19 +160,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   CONSTRAINT fk_audit_action FOREIGN KEY (action_id) REFERENCES audit_actions(id),
   CONSTRAINT fk_audit_entity FOREIGN KEY (entity_id) REFERENCES audit_entities(id)
 );
+--> statement-breakpoint
 
 INSERT IGNORE INTO roles (name) VALUES
   ('global_admin'),
   ('org_admin'),
   ('user');
+--> statement-breakpoint
 
 INSERT IGNORE INTO user_statuses (name) VALUES
   ('active'),
   ('archived');
+--> statement-breakpoint
 
 INSERT IGNORE INTO organization_statuses (name) VALUES
   ('active'),
   ('archived');
+--> statement-breakpoint
 
 INSERT IGNORE INTO deny_reasons (code, message) VALUES
   ('API_NOT_FOUND', 'API not found'),
@@ -170,6 +189,7 @@ INSERT IGNORE INTO deny_reasons (code, message) VALUES
   ('USER_OUTSIDE_ALLOWED_HOURS', 'User outside allowed hours'),
   ('USER_ORG_MISMATCH', 'User organization mismatch'),
   ('UPSTREAM_ERROR', 'Upstream request failed');
+--> statement-breakpoint
 
 INSERT IGNORE INTO audit_actions (code) VALUES
   ('ORG_CREATE'),
@@ -186,6 +206,7 @@ INSERT IGNORE INTO audit_actions (code) VALUES
   ('WINDOW_CREATE'),
   ('WINDOW_UPDATE'),
   ('WINDOW_ARCHIVE');
+--> statement-breakpoint
 
 INSERT IGNORE INTO audit_entities (name) VALUES
   ('org'),

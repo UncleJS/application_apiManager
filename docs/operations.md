@@ -30,9 +30,9 @@
    - phpMyAdmin: `https://localhost:55002`
 
 Notes:
-- The backend uses a self-signed cert; your browser will show a warning.
-- The frontend and phpMyAdmin are served over HTTPS with a self-signed cert via Caddy.
-- Visit `https://localhost:55001` once and accept the cert so the frontend can call the API.
+- Host helper scripts require Python 3 (`python3` or `python`) for env normalization.
+- Public endpoints are served over HTTPS with a Caddy internal certificate; your browser will show a warning.
+- Visit `https://localhost:55001` once and accept the Caddy certificate so the frontend can call the API.
 - `https://localhost:55001/healthz` returns a simple health response.
 - MariaDB has no host port; it is only reachable inside the pod.
 
@@ -105,14 +105,12 @@ Create a `.env` file at repo root (see `.env.example`).
 Scripts load `.env` automatically, even when run from `scripts/`.
 
 Backend:
-- `PORT` (default `55001`)
+- `PORT` (internal backend port, default `3001`)
 - `DB_HOST` (default `127.0.0.1`)
 - `DB_PORT` (default `3306`)
 - `DB_USER` (default `api_manager`)
 - `DB_PASSWORD` (default `api_manager_password`)
 - `DB_DATABASE` (default `api_manager`)
-- `TLS_CERT_PATH` (default `/data/tls/cert.pem`)
-- `TLS_KEY_PATH` (default `/data/tls/key.pem`)
 - `BOOTSTRAP_ADMIN` (default `true`)
 - `BOOTSTRAP_ADMIN_PASSWORD` (must be non-default when bootstrap admin is enabled)
 - `SEED_DATA` (default `false`)
@@ -144,6 +142,7 @@ Frontend:
 ## Reverse proxy usage
 Requests to the backend HTTPS port are routed by longest-prefix match on `base_path`.
 The suffix after `base_path` is appended to `target_url`.
+Each configured `base_path` must be globally unique across all organisations.
 
 Browser login flow:
 - If a restricted API is accessed in a browser, the user is redirected to `/login`.

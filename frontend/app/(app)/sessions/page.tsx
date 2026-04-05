@@ -6,18 +6,19 @@ import {
   type Org, type Session, type User,
 } from "@/lib/api";
 import {
-  Badge, Button, Card, CardContent, Input, Label, SelectNative,
+  Badge, Button, Card, CardContent, Label, SelectNative,
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { formatSast, normalizeRole } from "@/lib/utils";
+import { formatSast, normalizeRole, parseUtcDate } from "@/lib/utils";
 import { ShieldOff } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getErrorMessage } from "@/lib/page-utils";
 
 function getSessionStatus(s: Session): "active" | "revoked" | "expired" {
   if (s.revoked_at_utc) return "revoked";
-  if (new Date(s.expires_at_utc) < new Date()) return "expired";
+  const expiresAt = parseUtcDate(s.expires_at_utc);
+  if (expiresAt && expiresAt < new Date()) return "expired";
   return "active";
 }
 
@@ -42,7 +43,11 @@ export default function SessionsPage() {
     setError("");
     try {
       const opts = role === "global_admin" ? {} : { orgId };
-      const [sd, ud, od] = await Promise.all([getSessions(opts), getUsers(), getOrgs()]);
+      const [sd, ud, od] = await Promise.all([
+        getSessions(opts),
+        getUsers(),
+        role === "global_admin" ? getOrgs() : Promise.resolve({ items: [] as Org[] }),
+      ]);
       setSessions(sd.items);
       setUsers(ud.items);
       setOrgs(od.items);

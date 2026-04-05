@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   archiveUser, createUser, getOrgs, getLookups, getUsers, updateUser,
   type Org, type User,
@@ -177,8 +177,8 @@ export default function UsersPage() {
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No users found.</TableCell></TableRow>
               )}
               {users.map((u) => (
-                <>
-                  <TableRow key={u.id}>
+                <Fragment key={u.id}>
+                  <TableRow>
                     <TableCell className="font-medium">{u.username}</TableCell>
                     <TableCell>{u.organization_name}</TableCell>
                     <TableCell>
@@ -217,7 +217,7 @@ export default function UsersPage() {
                     </TableCell>
                   </TableRow>
                   {expandedId === u.id && (
-                    <TableRow key={"exp-" + u.id}>
+                    <TableRow>
                       <TableCell colSpan={5} className="bg-muted/20 p-4">
                         {expandedTab === "permissions" && (
                           <PermissionsEditor userId={u.id} organizationId={u.organization_id} />
@@ -228,7 +228,7 @@ export default function UsersPage() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               ))}
             </TableBody>
           </Table>

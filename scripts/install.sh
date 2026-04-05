@@ -10,6 +10,7 @@ SYSTEMD_DIR="$HOME/.config/containers/systemd"
 ENV_FILE="$ROOT_DIR/.env"
 ENV_DEST="$SYSTEMD_DIR/api-manager.env"
 CADDYFILE="$ROOT_DIR/infra/caddy/Caddyfile"
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
 # ── colour helpers ────────────────────────────────────────────────────────────
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -18,7 +19,7 @@ red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 
 normalize_env_file() {
-  python - "$1" <<'PY'
+  "$PYTHON_BIN" - "$1" <<'PY'
 from pathlib import Path
 import secrets, string, sys
 
@@ -85,6 +86,11 @@ if ! command -v podman >/dev/null 2>&1; then
   exit 1
 fi
 
+if [ -z "$PYTHON_BIN" ]; then
+  red "ERROR: python3 (or python) not found. Helper scripts require Python 3 on the host."
+  exit 1
+fi
+
 # ── linger ────────────────────────────────────────────────────────────────────
 step "Enabling linger for $USER (boot persistence)"
 loginctl enable-linger "$USER"
@@ -131,11 +137,10 @@ done
 
 # ── seed Caddyfile into named volume ──────────────────────────────────────────
 step "Writing Caddyfile into api-manager-caddy-config volume"
-podman run --rm \
+podman run --rm -i \
   -v systemd-api-manager-caddy-config:/etc/caddy:Z \
-  -v "$CADDYFILE":/tmp/Caddyfile:ro \
   docker.io/library/busybox:latest \
-  sh -c "cp /tmp/Caddyfile /etc/caddy/Caddyfile && echo 'Caddyfile written'"
+  sh -lc 'cat > /etc/caddy/Caddyfile && echo "Caddyfile written"' < "$CADDYFILE"
 
 # ── enable + start services ───────────────────────────────────────────────────
 step "Enabling systemd user services"

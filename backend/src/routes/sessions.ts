@@ -5,6 +5,7 @@ import { buildError } from "../utils/errors";
 import { revokeSession } from "../sessions";
 import { requireRole } from "../middleware/requireRole";
 import { query as dbQuery, type QueryValue } from "../db/index";
+import { serializeUtcFields } from "../utils/datetime";
 import type { ProtectedContext } from "../types/http";
 
 type SessionsQuery = {
@@ -77,7 +78,7 @@ export const sessionsPlugin = new Elysia({ prefix: "/sessions" })
       organization_id: Number(row.organization_id)
     }));
 
-    return { items };
+    return serializeUtcFields({ items });
   })
   .post("/:id/revoke", async (context) => {
     const { params, authUser, _authError, set } = context as unknown as ProtectedContext<Record<string, unknown>, unknown, SessionParams>;
