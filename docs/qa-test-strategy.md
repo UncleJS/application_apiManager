@@ -1,11 +1,19 @@
 # QA & Test Strategy — apiManager
-> Generated: 2026-03-26 | Read-only review, no files modified.
+> Updated: 2026-04-05 | Refresh when tests, auth, or proxy behavior changes.
 
 ---
 
 ## 0. Baseline: Current Test Coverage
 
-**Zero automated tests exist.** No test runner, no test files, no `*.test.ts`, no `*.spec.ts` anywhere in the repo. This is the single largest QA risk. Every merge is currently validated only by manual inspection and linting.
+Automated backend tests now exist and run with `bun test`.
+
+Current committed coverage includes:
+- `src/proxy.test.ts`
+- `src/utils/datetime.test.ts`
+- `src/utils/audit.test.ts`
+- `src/utils/network.test.ts`
+
+The biggest remaining QA risk is still limited coverage around auth flows, RBAC/org isolation, reports, and the proxy authorization matrix.
 
 ---
 
@@ -32,8 +40,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `isSessionExpired`: `revoked_at_utc` stored in DB as raw string; comparison done by Luxon `fromSQL` — timezone assumption baked in | `sessions.ts:67-75` |
 | `touchSession` called BEFORE expiry check in `authenticate.ts` — no, actually after — verify order carefully | `authenticate.ts:52-57` |
 | Token is SHA-256 hash of 256-bit random — strong, but never rotated after use | `sessions.ts:14-17` |
-| Cookie set `SameSite=None; Secure` — will not work without HTTPS; dev environment may silently fail | `authenticate.ts:62-67` |
-| Logout does NOT revoke Bearer token (only cookie cleared) | `auth.ts:logout` |
+| Cookie is `SameSite=Lax; Secure` — HTTPS is still required for browser cookie flows | `authenticate.ts:55-62` |
+| Logout revokes the backing session token and clears the cookie; verify both bearer and cookie logout paths in integration tests | `routes/auth.ts:78-99` |
 
 ### P1 — RBAC / Org Isolation (`src/routes/users.ts`, `src/routes/apis.ts`, `src/routes/permissions.ts`)
 

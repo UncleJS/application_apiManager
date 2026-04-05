@@ -40,13 +40,14 @@ Notes:
 
 ## Sessions
 - Browser sessions use an HTTP-only cookie (`api_manager_session`).
-- API clients can use `Authorization: Bearer <token>` with the issued session token.
+- API clients can reuse the same session token as either a cookie or `Authorization: Bearer <token>`.
 - Idle timeout: 60 minutes. Hard max: 180 minutes.
 
 API client usage:
 - `POST /auth/login` with JSON `{ "username": "...", "password": "..." }`
 - Response sets the auth cookie and returns `{ "ok": true }`
-- If you use bearer auth, send the session token in `Authorization: Bearer <token>`
+- The login JSON body does **not** include the session token.
+- Non-browser clients that want bearer auth must extract the `api_manager_session` value from the `Set-Cookie` header, then send it as `Authorization: Bearer <token>`.
 
 [Go to TOC](#table-of-contents)
 
@@ -59,11 +60,13 @@ Container healthchecks are configured in Quadlet container units for:
 [Go to TOC](#table-of-contents)
 
 ## Seed data (dev/test)
+`scripts/install.sh` reads seed flags from the root `.env` file.
+
 Enable dev/test seed data on startup:
-- `SEED_DATA=true scripts/install.sh`
+- Set `SEED_DATA=true` in `.env`, then run `scripts/install.sh`.
 
 Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
-- `SEED_DATA=true SEED_ACCESS_LOGS=true scripts/install.sh`
+- Set `SEED_DATA=true` and `SEED_ACCESS_LOGS=true` in `.env`, then run `scripts/install.sh`.
 - This can take a few minutes; progress logs print every 10k rows.
 - If access logs already exist, setup skips access log seeding.
 
@@ -105,7 +108,7 @@ Create a `.env` file at repo root (see `.env.example`).
 Scripts load `.env` automatically, even when run from `scripts/`.
 
 Backend:
-- `PORT` (internal backend port, default `3001`)
+- `PORT` (internal backend port; Quadlet sets `3001` for the deployed stack)
 - `DB_HOST` (default `127.0.0.1`)
 - `DB_PORT` (default `3306`)
 - `DB_USER` (default `api_manager`)
@@ -123,7 +126,8 @@ Backend:
 - `PROXY_MAX_REQUEST_BYTES`, `PROXY_MAX_RESPONSE_BYTES`
 
 Setup script:
-- `DB_ROOT_PASSWORD` (default `root_password`)
+- `MARIADB_ROOT_PASSWORD` (required; used by MariaDB and by `scripts/install.sh` readiness checks)
+- `DB_ROOT_PASSWORD` (compatibility alias present in `.env.example`)
 - `DB_HOST` (default `127.0.0.1`)
 
 Frontend:
@@ -150,7 +154,7 @@ Browser login flow:
 
 API client login flow:
 - `POST /auth/login` returns `{ ok: true }` and sets the auth cookie.
-- Bearer-token clients can still send `Authorization: Bearer <token>`.
+- Bearer-token clients can still send `Authorization: Bearer <token>` when reusing an existing session token.
 
 Example 1 (simple passthrough):
 - `base_path`: `/acme/orders`
@@ -171,7 +175,7 @@ curl -k https://localhost:55001/global/public/ping
 
 Example 4 (restricted API):
 - Browser clients use the auth cookie set by `/auth/login`.
-- Bearer-token clients must use a valid issued session token; the login JSON response no longer includes it.
+- Bearer-token clients must use a valid session token taken from the `api_manager_session` cookie; the login JSON response does not include it.
 
 Notes:
 - The API must be enabled and within its allowed hours (unless global admin).

@@ -131,8 +131,8 @@ Important values:
 
 ## Authentication
 - Browser/admin sessions: secure HTTP-only cookie `api_manager_session`.
-- API clients: `POST /auth/login` with username/password, then send `Authorization: Bearer <token>` using the issued session token.
-- `POST /auth/login` now returns `{ ok: true }` and sets the auth cookie; it no longer echoes the session token in the JSON body.
+- API clients: `POST /auth/login` with username/password. The response returns `{ ok: true }` and sets the `api_manager_session` cookie.
+- For non-browser clients, the session token can be taken from the `Set-Cookie` header and replayed as either the `api_manager_session` cookie or `Authorization: Bearer <token>`.
 - Seeded/default passwords must be set to non-placeholder values before use.
 - Public HTTPS is terminated by Caddy; the backend itself is internal HTTP-only inside the pod.
 
@@ -140,7 +140,6 @@ Important values:
 
 ## Documentation
 - [Operations guide](docs/operations.md)
-- [Project plan](docs/plan.md)
 - [Agent instructions](AGENTS.md)
 
 [Go to TOC](#table-of-contents)
