@@ -5,7 +5,7 @@ import { db, pool } from "../db/client";
 import { sql } from "drizzle-orm";
 import { nowUtc, toUtcSql } from "../utils/datetime";
 
-const DEFAULT_PASSWORD = "001002..Ad";
+const DEFAULT_PASSWORD = "010203!@";
 
 const LOOKUP_TABLES = {
   organization_statuses: "organization_statuses",

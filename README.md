@@ -8,18 +8,21 @@ API gateway and admin console for managing proxied APIs with org-level access co
 ![Infra](https://img.shields.io/badge/infra-Podman%20Quadlet-892CA0)
 
 ## Table of Contents
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Repository Structure](#repository-structure)
-- [Requirements](#requirements)
-- [Quickstart](#quickstart)
-- [Local Development](#local-development)
-- [Environment Variables](#environment-variables)
-- [Ports](#ports)
-- [Authentication](#authentication)
-- [Documentation](#documentation)
-- [Current Gaps](#current-gaps)
-- [Footer](#footer)
+- [API Manager](#api-manager)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Key Features](#key-features)
+  - [Repository Structure](#repository-structure)
+  - [Requirements](#requirements)
+  - [Quickstart](#quickstart)
+  - [Local Development](#local-development)
+  - [Environment Variables](#environment-variables)
+  - [Ports](#ports)
+  - [Authentication](#authentication)
+  - [Seeded dev/test users](#seeded-devtest-users)
+  - [Documentation](#documentation)
+  - [Current Gaps](#current-gaps)
+  - [Footer](#footer)
 
 ## Overview
 This project includes:
@@ -135,6 +138,23 @@ Important values:
 - For non-browser clients, the session token can be taken from the `Set-Cookie` header and replayed as either the `api_manager_session` cookie or `Authorization: Bearer <token>`.
 - Seeded/default passwords must be set to non-placeholder values before use.
 - Public HTTPS is terminated by Caddy; the backend itself is internal HTTP-only inside the pod.
+
+[Go to TOC](#table-of-contents)
+
+## Seeded dev/test users
+When `SEED_DATA=true`, the seed script creates these users:
+- `global-admin`
+- `acme-admin`
+- `acme-user`
+- `globex-admin`
+- `globex-user`
+
+All seeded users share one password. The seed script resolves it in this order:
+- `SEED_USER_PASSWORD`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- internal fallback `010203!@` (manual seeding only)
+
+When you run `scripts/install.sh` with `SEED_DATA=true`, the script auto-generates `SEED_USER_PASSWORD` in `.env` if it is blank or still set to the placeholder value.
 
 [Go to TOC](#table-of-contents)
 

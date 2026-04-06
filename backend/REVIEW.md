@@ -108,7 +108,7 @@ R9 — Dead jsonwebtoken dependency with CVE history
 
 R10 — Hardcoded bootstrap admin password default
   File: src/config.ts line ~77
-  bootstrapPassword defaults to '001002..Ad' if env var absent.
+  bootstrapPassword defaults to '010203!@' if env var absent.
   Fix: require BOOTSTRAP_ADMIN_PASSWORD; throw at startup if bootstrapAdmin=true and it is unset.
 
 R11 — logAccess throws if deny reason code is unknown => 500 instead of clean error

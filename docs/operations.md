@@ -64,6 +64,10 @@ Container healthchecks are configured in Quadlet container units for:
 
 Enable dev/test seed data on startup:
 - Set `SEED_DATA=true` in `.env`, then run `scripts/install.sh`.
+- Seeded users: `global-admin`, `acme-admin`, `acme-user`, `globex-admin`, `globex-user`.
+- All seeded users share the same password from `SEED_USER_PASSWORD`.
+- If `SEED_USER_PASSWORD` is blank or still `change_this_for_seeded_users`, `scripts/install.sh` auto-generates a non-placeholder value in `.env`.
+- If you run the backend seed script manually instead of `scripts/install.sh`, the password falls back to `BOOTSTRAP_ADMIN_PASSWORD`, then to the internal default `010203!@`.
 
 Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Set `SEED_DATA=true` and `SEED_ACCESS_LOGS=true` in `.env`, then run `scripts/install.sh`.
@@ -74,7 +78,8 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## Default admin (dev/test)
 - Username: `global-admin`
-- Password is taken from `BOOTSTRAP_ADMIN_PASSWORD` and must not be left at a placeholder value.
+- Without `SEED_DATA`, the bootstrap admin password comes from `BOOTSTRAP_ADMIN_PASSWORD` and must not be left at a placeholder value.
+- With `SEED_DATA=true`, `global-admin` is also part of the seeded user set and uses the shared seeded-user password described above.
 
 [Go to TOC](#table-of-contents)
 

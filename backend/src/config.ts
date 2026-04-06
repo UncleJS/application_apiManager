@@ -4,7 +4,7 @@ function resolveBootstrapPassword(): string {
     return "";
   }
 
-  if (!configured || configured === "001002..Ad" || configured === "change_me") {
+  if (!configured || configured === "010203!@" || configured === "change_me") {
     throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be set to a non-default value when bootstrap admin is enabled");
   }
 

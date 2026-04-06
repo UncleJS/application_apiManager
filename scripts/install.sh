@@ -57,7 +57,7 @@ ensure_alias('DB_PASSWORD', 'MARIADB_PASSWORD')
 ensure_alias('NEXT_PUBLIC_API_URL', 'VITE_API_BASE_URL')
 
 bootstrap_enabled = (get('BOOTSTRAP_ADMIN') or 'true').lower() != 'false'
-default_passwords = {'', 'change_me', '001002..Ad', 'change_this_to_a_unique_strong_password'}
+default_passwords = {'', 'change_me', '010203!@', 'change_this_to_a_unique_strong_password'}
 if bootstrap_enabled and (get('BOOTSTRAP_ADMIN_PASSWORD') or '') in default_passwords:
     alphabet = string.ascii_letters + string.digits + '-_!@#%^&*'
     generated = ''.join(secrets.choice(alphabet) for _ in range(32))

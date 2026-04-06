@@ -93,7 +93,7 @@ The AGENTS.md rule says "Ask whether to enable linger when boot persistence is r
 **Fix:** Gate behind `--enable-linger` flag or prompt the user (`read -rp "Enable linger for boot persistence? [y/N]"`).
 
 **R7 — `BOOTSTRAP_ADMIN_PASSWORD` default value exposed in `.env.example`**  
-File: `.env.example` line: `BOOTSTRAP_ADMIN_PASSWORD=001002..Ad`  
+File: `.env.example` line: `BOOTSTRAP_ADMIN_PASSWORD=010203!@`  
 A real-looking (non-obviously-placeholder) default password in a committed example file is a credential-stuffing vector if copied verbatim to production.  
 **Fix:** Replace with `BOOTSTRAP_ADMIN_PASSWORD=CHANGE_ME_STRONG_PASSWORD`.
 
