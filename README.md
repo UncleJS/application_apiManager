@@ -77,7 +77,7 @@ scripts/install.sh
 
 Notes:
 - Certificates are self-signed; browser warnings are expected.
-- Visit `https://localhost:55001` once and accept the cert so the frontend can call the backend.
+- Frontend requests use the same-origin `/api/*` proxy on `https://localhost:55000`; direct `55001` trust is only needed when you open backend docs or API routes yourself.
 - After code changes, use `scripts/rebuild.sh` to rebuild images and restart.
 - To stop: `scripts/stop.sh`
 - To remove: `scripts/uninstall.sh` (`--purge` also removes volumes when safe).

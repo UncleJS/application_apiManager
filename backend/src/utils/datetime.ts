@@ -10,7 +10,11 @@ export function toUtcSql(date: DateTime): string {
   return date.toUTC().toFormat(SQL_FORMAT);
 }
 
-export function toUtcIso(value: string): string {
+export function toUtcIso(value: string | Date): string {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? value.toString() : value.toISOString();
+  }
+
   const parsed = DateTime.fromSQL(value, { zone: "utc" });
   return parsed.isValid ? parsed.toUTC().toISO() ?? value : value;
 }
@@ -25,8 +29,12 @@ export function serializeUtcFields<T>(value: T): T {
   }
 
   const entries = Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => {
-    if (key.endsWith("_utc") && typeof entryValue === "string") {
+    if (key.endsWith("_utc") && (typeof entryValue === "string" || entryValue instanceof Date)) {
       return [key, toUtcIso(entryValue)];
+    }
+
+    if (entryValue instanceof Date) {
+      return [key, entryValue];
     }
 
     if (Array.isArray(entryValue) || (entryValue && typeof entryValue === "object")) {

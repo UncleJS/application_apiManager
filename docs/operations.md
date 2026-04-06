@@ -32,7 +32,7 @@
 Notes:
 - Host helper scripts require Python 3 (`python3` or `python`) for env normalization.
 - Public endpoints are served over HTTPS with a Caddy internal certificate; your browser will show a warning.
-- Visit `https://localhost:55001` once and accept the Caddy certificate so the frontend can call the API.
+- The frontend uses the same-origin `https://localhost:55000/api/*` proxy for browser API calls. Visit `https://localhost:55001` only when you need direct backend access (for example `/docs` or `/healthz`).
 - `https://localhost:55001/healthz` returns a simple health response.
 - MariaDB has no host port; it is only reachable inside the pod.
 
