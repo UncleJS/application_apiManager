@@ -31,6 +31,7 @@
 
 Notes:
 - Host helper scripts require Python 3 (`python3` or `python`) for env normalization.
+- `scripts/install.sh` installs only the runtime Quadlets; build/start the separate dev container with `scripts/dev.sh`.
 - Public endpoints are served over HTTPS with a Caddy internal certificate; your browser will show a warning.
 - The frontend uses the same-origin `https://localhost:55000/api/*` proxy for browser API calls. Visit `https://localhost:55001` only when you need direct backend access (for example `/docs` or `/healthz`).
 - `https://localhost:55001/healthz` returns a simple health response.
@@ -92,7 +93,8 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## Rebuild / remove
 ### install.sh vs rebuild.sh
-- `scripts/install.sh` installs Quadlet units, copies the env file, builds images, starts services, waits for DB, runs migrations, and optionally seeds.
+- `scripts/install.sh` installs runtime Quadlet units, copies the env file, builds images, starts services, waits for DB, runs migrations, and optionally seeds.
+- `scripts/dev.sh` installs/rebuilds only the dev Quadlet and restarts the dev container.
 - `scripts/rebuild.sh` rebuilds backend and/or frontend images and restarts those services.
 - Use `scripts/rebuild.sh` when you need code changes to take effect immediately.
 - Neither script removes volumes or deletes data.

@@ -11,7 +11,7 @@
     "test": "BOOTSTRAP_ADMIN=false bun test",
     "test:watch": "BOOTSTRAP_ADMIN=false bun test --watch",
     "seed": "bun run src/scripts/seed.ts",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
   },

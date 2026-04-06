@@ -69,10 +69,11 @@ This project includes:
 cp .env.example .env
 # edit .env — set MARIADB_* and review generated/bootstrap values
 ```
-2. Install Quadlet units, create volumes, seed Caddy config, enable linger, start pod:
+2. Install runtime Quadlet units, create volumes, seed Caddy config, enable linger, start pod:
 ```bash
 scripts/install.sh
 ```
+   For the separate dev container workflow, run `scripts/dev.sh`.
 3. Open:
    - Frontend: `https://localhost:55000`
    - Backend API / Swagger: `https://localhost:55001/docs`
@@ -82,6 +83,7 @@ Notes:
 - Certificates are self-signed; browser warnings are expected.
 - Frontend requests use the same-origin `/api/*` proxy on `https://localhost:55000`; direct `55001` trust is only needed when you open backend docs or API routes yourself.
 - After code changes, use `scripts/rebuild.sh` to rebuild images and restart.
+- `scripts/install.sh` does not install the dev Quadlet; use `scripts/dev.sh` for local development.
 - To stop: `scripts/stop.sh`
 - To remove: `scripts/uninstall.sh` (`--purge` also removes volumes when safe).
 

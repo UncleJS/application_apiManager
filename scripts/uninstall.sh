@@ -27,13 +27,6 @@ for svc in api-manager-edge api-manager-frontend api-manager-backend api-manager
   systemctl --user stop "${svc}.service" 2>/dev/null || true
 done
 
-# ── disable services ──────────────────────────────────────────────────────────
-step "Disabling services"
-for svc in api-manager-pod-pod api-manager-mariadb api-manager-backend api-manager-frontend api-manager-phpmyadmin api-manager-edge api-manager-dev; do
-  systemctl --user disable "${svc}.service" 2>/dev/null || true
-  green "  disabled ${svc}"
-done
-
 # ── remove unit files ─────────────────────────────────────────────────────────
 step "Removing Quadlet unit files from $SYSTEMD_DIR"
 for pattern in \
@@ -60,6 +53,7 @@ done
 
 systemctl --user daemon-reload
 green "  daemon-reload done"
+green "  Quadlet install state is removed by deleting source unit files"
 
 # ── purge volumes ─────────────────────────────────────────────────────────────
 if [ "$PURGE" = "true" ]; then
@@ -68,17 +62,35 @@ if [ "$PURGE" = "true" ]; then
   printf 'Type YES to confirm: '
   read -r confirm
   if [ "$confirm" = "YES" ]; then
-    for vol in api-manager-db api-manager-tls api-manager-jwt api-manager-caddy-config api-manager-caddy-data api-manager-dev; do
-      if podman volume inspect "$vol" >/dev/null 2>&1; then
+    base_volumes=(
+      api-manager-db
+      api-manager-tls
+      api-manager-jwt
+      api-manager-caddy-config
+      api-manager-caddy-data
+      api-manager-dev
+    )
+    candidate_volumes=()
+
+    for base_vol in "${base_volumes[@]}"; do
+      for vol in "$base_vol" "systemd-$base_vol"; do
+        if podman volume inspect "$vol" >/dev/null 2>&1; then
+          candidate_volumes+=("$vol")
+        fi
+      done
+    done
+
+    if [ "${#candidate_volumes[@]}" -eq 0 ]; then
+      yellow "  no api-manager volumes found, skipping"
+    else
+      for vol in "${candidate_volumes[@]}"; do
         if podman volume rm --force "$vol" 2>/dev/null; then
           green "  removed volume $vol"
         else
           red "  FAILED to remove volume $vol (still in use?)"
         fi
-      else
-        yellow "  volume $vol not found, skipping"
-      fi
-    done
+      done
+    fi
   else
     yellow "  Purge skipped (confirmation not given)"
   fi

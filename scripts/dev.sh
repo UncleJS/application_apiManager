@@ -94,7 +94,6 @@ step "Building ${PROJECT_NAME}-dev:latest"
 podman build -f "$ROOT_DIR/Containerfile.dev" -t "${PROJECT_NAME}-dev:latest" "$ROOT_DIR"
 
 step "Restarting ${PROJECT_NAME}-dev service"
-systemctl --user enable api-manager-dev.service >/dev/null 2>&1 || true
 systemctl --user start api-manager-pod-pod.service >/dev/null 2>&1 || true
 systemctl --user restart "${PROJECT_NAME}-dev.service"
 

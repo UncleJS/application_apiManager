@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # install.sh — first-time setup for API Manager
-# Copies Quadlet units, enables systemd user services, builds images,
-# seeds Caddyfile into named volume, waits for DB, runs migrations.
+# Copies Quadlet units, enables persistent container services, builds images,
+# seeds Caddyfile into named volume, starts the generated pod unit, waits for DB,
+# and runs migrations.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -108,13 +109,34 @@ chmod 600 "$ENV_DEST"
 green "  Env copied → $ENV_DEST"
 
 # ── copy + patch Quadlet units ────────────────────────────────────────────────
-step "Installing Quadlet units → $SYSTEMD_DIR"
-for unit in "$QUADLET_DIR"/*.pod "$QUADLET_DIR"/*.volume "$QUADLET_DIR"/*.container; do
+step "Installing runtime Quadlet units → $SYSTEMD_DIR"
+for unit in \
+  "$QUADLET_DIR"/*.pod \
+  "$QUADLET_DIR"/api-manager-db.volume \
+  "$QUADLET_DIR"/api-manager-tls.volume \
+  "$QUADLET_DIR"/api-manager-jwt.volume \
+  "$QUADLET_DIR"/api-manager-caddy-config.volume \
+  "$QUADLET_DIR"/api-manager-caddy-data.volume \
+  "$QUADLET_DIR"/api-manager-mariadb.container \
+  "$QUADLET_DIR"/api-manager-backend.container \
+  "$QUADLET_DIR"/api-manager-frontend.container \
+  "$QUADLET_DIR"/api-manager-phpmyadmin.container \
+  "$QUADLET_DIR"/api-manager-edge.container; do
   dest="$SYSTEMD_DIR/$(basename "$unit")"
   cp "$unit" "$dest"
   # Replace placeholder %h/.config/... EnvironmentFile with the resolved path
   sed -i "s|%h/.config/containers/systemd/api-manager.env|$ENV_DEST|g" "$dest"
   green "  $(basename "$unit")"
+done
+
+green "  Dev Quadlet is managed separately via scripts/dev.sh"
+
+for stale_unit in api-manager-dev.container api-manager-dev.volume; do
+  target="$SYSTEMD_DIR/$stale_unit"
+  if [ -f "$target" ]; then
+    rm -f "$target"
+    green "  removed stale $stale_unit"
+  fi
 done
 
 # ── daemon-reload ─────────────────────────────────────────────────────────────
@@ -130,7 +152,7 @@ podman build -f "$ROOT_DIR/frontend/Containerfile" -t api-manager-frontend:lates
 
 # ── create named volumes (idempotent) ─────────────────────────────────────────
 step "Creating named volumes"
-for vol in api-manager-db api-manager-tls api-manager-jwt api-manager-caddy-config api-manager-caddy-data api-manager-dev; do
+for vol in api-manager-db api-manager-tls api-manager-jwt api-manager-caddy-config api-manager-caddy-data; do
   podman volume inspect "$vol" >/dev/null 2>&1 || podman volume create "$vol"
   green "  $vol"
 done
@@ -142,25 +164,14 @@ podman run --rm -i \
   docker.io/library/busybox:latest \
   sh -lc 'cat > /etc/caddy/Caddyfile && echo "Caddyfile written"' < "$CADDYFILE"
 
-# ── enable + start services ───────────────────────────────────────────────────
-step "Enabling systemd user services"
-systemctl --user enable \
-  api-manager-pod-pod.service \
-  api-manager-dev.service \
-  api-manager-mariadb.service \
-  api-manager-backend.service \
-  api-manager-frontend.service \
-  api-manager-phpmyadmin.service \
-  api-manager-edge.service
+# ── start services ────────────────────────────────────────────────────────────
+step "Starting runtime systemd user container services"
+green "  Quadlet applies [Install] from source units during generation; generated services are not enabled directly"
+green "  Dev Quadlet is not installed by scripts/install.sh; use scripts/dev.sh for local development"
 
-step "Starting api-manager pod and services"
+step "Starting generated api-manager pod unit and MariaDB"
 systemctl --user start api-manager-pod-pod.service
-systemctl --user start \
-  api-manager-mariadb.service \
-  api-manager-backend.service \
-  api-manager-frontend.service \
-  api-manager-phpmyadmin.service \
-  api-manager-edge.service
+systemctl --user start api-manager-mariadb.service
 
 # ── wait for MariaDB ──────────────────────────────────────────────────────────
 step "Waiting for MariaDB to be ready"
@@ -187,7 +198,15 @@ green "  MariaDB ready"
 
 # ── run Drizzle migrations ────────────────────────────────────────────────────
 step "Running database migrations"
-podman exec api-manager-backend bun run db:migrate
+podman run --rm \
+  --pod api-manager-pod \
+  --env DB_HOST=127.0.0.1 \
+  --env DB_PORT=3306 \
+  --env HOST=0.0.0.0 \
+  --env PORT=3001 \
+  --env-file "$ENV_DEST" \
+  localhost/api-manager-backend:latest \
+  bun run db:migrate
 
 # ── optional seed ─────────────────────────────────────────────────────────────
 SEED_DATA="$(grep '^SEED_DATA=' "$ENV_FILE" | cut -d= -f2- || echo 'false')"
@@ -195,11 +214,25 @@ SEED_ACCESS_LOGS="$(grep '^SEED_ACCESS_LOGS=' "$ENV_FILE" | cut -d= -f2- || echo
 
 if [ "$SEED_DATA" = "true" ] || [ "$SEED_ACCESS_LOGS" = "true" ]; then
   step "Seeding database"
-  podman exec \
+  podman run --rm \
+    --pod api-manager-pod \
+    --env DB_HOST=127.0.0.1 \
+    --env DB_PORT=3306 \
+    --env HOST=0.0.0.0 \
+    --env PORT=3001 \
+    --env-file "$ENV_DEST" \
     -e SEED_DATA="$SEED_DATA" \
     -e SEED_ACCESS_LOGS="$SEED_ACCESS_LOGS" \
-    api-manager-backend bun run seed
+    localhost/api-manager-backend:latest \
+    bun run seed
 fi
+
+step "Starting backend, frontend, phpMyAdmin, and edge services"
+systemctl --user start \
+  api-manager-backend.service \
+  api-manager-frontend.service \
+  api-manager-phpmyadmin.service \
+  api-manager-edge.service
 
 # ── done ──────────────────────────────────────────────────────────────────────
 green ""
