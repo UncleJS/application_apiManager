@@ -27,3 +27,11 @@ node-compile-cache/
 
 # OS/editor
 .DS_Store
+
+# Credential / secret config files
+secrets.json
+secrets.*.json
+credentials.json
+*.credentials
+*.htpasswd
+htpasswd

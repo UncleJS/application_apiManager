@@ -74,6 +74,7 @@ cp .env.example .env
 scripts/install.sh
 ```
    For the separate dev container workflow, run `scripts/dev.sh`.
+   
 3. Open:
    - Frontend: `https://localhost:55000`
    - Backend API / Swagger: `https://localhost:55001/docs`

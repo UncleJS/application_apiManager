@@ -1,6 +1,18 @@
 # Frontend Code Review — API Manager
-**Date:** 2026-03-26  
+**Date:** 2026-03-26
 **Scope:** `/home/jacos/0_opencode/apiManager/frontend` (read-only)
+
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+![Frontend](https://img.shields.io/badge/frontend-Next.js%2014%20%2B%20Tailwind-61DAFB)
+![UI](https://img.shields.io/badge/ui-shadcn%20dark%20theme-0f172a)
+
+## Table of Contents
+- [1. Architecture Overview](#1-architecture-overview)
+- [2. Strengths](#2-strengths)
+- [3. Concrete Risks & Bugs](#3-concrete-risks--bugs)
+- [4. Missing Tests & Documentation](#4-missing-tests--documentation)
+- [5. Top-Priority Recommendations](#5-top-priority-recommendations)
+- [Footer](#footer)
 
 ---
 
@@ -27,6 +39,8 @@
 5. Login page posts credentials; on success calls `router.push("/apis"); router.refresh()`.
 6. Logout fires `/auth/logout` then unconditionally redirects.
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 2. Strengths
@@ -41,14 +55,16 @@
 - **Form guards** — buttons disabled while submitting (`disabled={saving}`); inline error display on login.
 - **Accessibility basics on login** — `<label htmlFor>`, `autoComplete` attributes, keyboard-submittable form.
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 3. Concrete Risks & Bugs
 
 ### 3.1 `formatSast` output format does not match spec
-**File:** `lib/utils.ts`  
-**Spec:** AGENTS.md requires `YYYY-MM-DD HH:mm` (per the repo) and the global standards say `yyyy-MM-dd HH:mm:ss` (with seconds).  
-**Actual:** `Intl.DateTimeFormat` with `en-ZA` locale and no `second` option produces `"2026-03-26, 14:30"` — the regex replaces slashes but the comma after the date may or may not be present depending on the ICU version in the runtime, making the output non-deterministic across Node/browser versions.  
+**File:** `lib/utils.ts`
+**Spec:** AGENTS.md requires `YYYY-MM-DD HH:mm` (per the repo) and the global standards say `yyyy-MM-dd HH:mm:ss` (with seconds).
+**Actual:** `Intl.DateTimeFormat` with `en-ZA` locale and no `second` option produces `"2026-03-26, 14:30"` — the regex replaces slashes but the comma after the date may or may not be present depending on the ICU version in the runtime, making the output non-deterministic across Node/browser versions.
 **Remediation:** Replace with explicit template string:
 ```ts
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -58,62 +74,64 @@ const tz = "Africa/Johannesburg";
 ```
 
 ### 3.2 `formatSast` strips seconds — Sessions page misses required precision
-**File:** `lib/utils.ts`, `app/(app)/sessions/page.tsx`  
+**File:** `lib/utils.ts`, `app/(app)/sessions/page.tsx`
 Sessions show `created_at_utc`, `last_activity_utc`, `expires_at_utc`. The spec mandates `HH:mm:ss`. `formatSast` has no `second: "2-digit"` option, so seconds are always lost.
 
 ### 3.3 `AuthProvider` mounted twice — double `/auth/me` call on initial load
-**File:** `app/(app)/layout.tsx`  
+**File:** `app/(app)/layout.tsx`
 The layout renders `<AuthProvider>` which runs `refresh()` on mount. `AppShell` inside it reads from context. Both the provider mount and the `useEffect([refresh])` may cause a second call in strict mode (React 18 dev double-invoke). Not a critical bug in production, but wastes a round-trip and can cause flicker.
 
 ### 3.4 Stale `load()` reference in `useEffect` deps — potential data races
-**Files:** `app/(app)/users/page.tsx`, `apis/page.tsx`, `orgs/page.tsx`, `sessions/page.tsx`  
+**Files:** `app/(app)/users/page.tsx`, `apis/page.tsx`, `orgs/page.tsx`, `sessions/page.tsx`
 All pages define `load` as a plain function inside the component body, then call `useEffect(() => { load(); }, [])`. Because `load` is not in the dep array, ESLint exhaustive-deps will warn. More critically, if a prop (e.g., `orgId`) changes the load function captures the old closure value and data will be stale. Currently this is masked because these pages don't re-render with new props, but it is a latent bug.
 
 ### 3.5 No error state exposed to user in most pages
-**Files:** all `app/(app)/*.tsx` except `login`  
+**Files:** all `app/(app)/*.tsx` except `login`
 Every `load()` uses `try {} finally { setLoading(false) }` with no `catch` block (or a silent `catch {}`). Network errors, 403, 500 — all silently produce an empty list. There is no toast, no error banner, no retry button. Users see empty tables with no feedback.
 
 ### 3.6 `PermissionsEditor` `useEffect` missing `load` in deps + silently swallowed errors
-**File:** `components/PermissionsEditor.tsx`  
+**File:** `components/PermissionsEditor.tsx`
 `useEffect(() => { load(); }, [userId, organizationId])` — `load` is not in deps (ESLint warning). The `toggle` function (assign/unassign) has no try/catch; a network error will throw uncaught and leave state inconsistent (optimistic update already applied in `setAssigned`). The optimistic update happens client-side but could desync from server.
 
 ### 3.7 `WindowsEditor` silently swallows all errors
-**File:** `components/WindowsEditor.tsx`  
+**File:** `components/WindowsEditor.tsx`
 `load()` has `catch {}` — empty catch. `handleArchive` has no try/catch at all. An archive failure leaves the item visually gone (local state not updated but stale) until next load.
 
 ### 3.8 `Dialog` component lacks focus trap and `Escape` key handler
-**File:** `components/ui.tsx`  
+**File:** `components/ui.tsx`
 The custom `Dialog` renders conditionally with no portal, no focus trap, and no `keydown` listener for Escape. Screen reader users and keyboard-only users cannot dismiss it. Also, clicking outside the modal does not close it (no backdrop `onClick`).
 
 ### 3.9 Role normalisation duplicated in three places
-**Files:** `lib/auth-context.tsx` (does NOT normalise), `components/Sidebar.tsx`, `app/(app)/sessions/page.tsx`, `app/(app)/users/page.tsx`  
-The regex `String(r).trim().toLowerCase().replace(/[\s-]+/g, "_")` is copy-pasted 3+ times. `AuthContext` stores the raw `user.role` and consumers re-normalise. If the backend ever returns a different casing, only some components would break.  
+**Files:** `lib/auth-context.tsx` (does NOT normalise), `components/Sidebar.tsx`, `app/(app)/sessions/page.tsx`, `app/(app)/users/page.tsx`
+The regex `String(r).trim().toLowerCase().replace(/[\s-]+/g, "_")` is copy-pasted 3+ times. `AuthContext` stores the raw `user.role` and consumers re-normalise. If the backend ever returns a different casing, only some components would break.
 **Fix:** normalise once in `AuthContext` or expose a `useRole()` hook.
 
 ### 3.10 `NEXT_PUBLIC_API_URL` env var name mismatch vs `.env.example`
-**File:** `lib/api.ts` (line 1) vs `.env.example`  
+**File:** `lib/api.ts` (line 1) vs `.env.example`
 The code reads `process.env.NEXT_PUBLIC_API_URL`; the `.env.example` defines `VITE_API_BASE_URL`. The Next.js frontend will silently use the hardcoded fallback `https://localhost:55001` in every environment unless `NEXT_PUBLIC_API_URL` is explicitly set. No documented mapping exists.
 
 ### 3.11 `users/page.tsx` user filter is client-side only
-**File:** `app/(app)/users/page.tsx`  
-`const visibleUsers = role === "global_admin" ? ud.items : ud.items.filter((u) => u.organization_id === orgId)`  
+**File:** `app/(app)/users/page.tsx`
+`const visibleUsers = role === "global_admin" ? ud.items : ud.items.filter((u) => u.organization_id === orgId)`
 The backend `/users` endpoint already scopes by org for non-admin roles (the backend enforces it), so this is double-filtering. But if the backend ever returns users from another org due to a bug, the client filter would be the only guard — yet it is not labelled as a security boundary.
 
 ### 3.12 `ReportsPage` catches errors silently and clears data
-**File:** `app/(app)/reports/page.tsx`  
+**File:** `app/(app)/reports/page.tsx`
 `catch { setReport(EMPTY) }` — user gets a blank table with no message. Combined with the date range not being validated before submit (empty from/to sends undefined range), a bad date input produces a confusing empty result.
 
 ### 3.13 `DateOnlyInput` is uncontrolled when `value` changes externally
-**File:** `components/DateOnlyInput.tsx`  
+**File:** `components/DateOnlyInput.tsx`
 The component initialises `internal` state once from `value ?? ""`. If `value` prop changes after mount (e.g., a form reset), the internal state is stale because `useState` ignores prop changes after first render. The controlled path (`value !== undefined`) does forward the prop correctly, but the component's own `internal` state is never synced. This can cause the overlay div to show the old value.
 
 ### 3.14 `TimeSelector` only allows 5-minute intervals — spec requires hour/minute/second matrix
-**File:** `components/TimeSelector.tsx`  
+**File:** `components/TimeSelector.tsx`
 The AGENTS.md spec calls for a matrix-style hour×minute×second grid picker. The current implementation is a simple `<select>` with HH:MM every 5 minutes. Seconds are not supported, which means access windows cannot be set with second granularity. This is a spec gap, not necessarily a bug if the backend also uses minute resolution.
 
 ### 3.15 `ui.tsx` Dialog has no backdrop click-outside-to-close
-**File:** `components/ui.tsx`  
+**File:** `components/ui.tsx`
 Backdrop is rendered as a div but has no `onClick` handler. Users cannot click outside to dismiss.
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -128,6 +146,8 @@ Backdrop is rendered as a div but has no `onClick` handler. Users cannot click o
 | **No JSDoc on `formatSast`** | The comment says "YYYY-MM-DD HH:mm" but omits seconds, contradicting the global standard. |
 | **No README for frontend** | No `frontend/README.md` describing env vars, dev setup, component conventions. |
 | **Accessibility audit** | No a11y tests (axe, Playwright). Dialog, checkbox toggles in PermissionsEditor lack `aria-label`. |
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -153,3 +173,12 @@ Minimal viable: on mount focus the first focusable child; add `window.addEventLi
 
 ### P7 — Add `NEXT_PUBLIC_API_URL` env var and update `useEffect` deps
 All page-level `load` functions should use `useCallback` with explicit deps so ESLint exhaustive-deps passes and stale-closure data bugs are prevented.
+
+[Go to TOC](#table-of-contents)
+
+---
+
+## Footer
+
+This page is licensed under the
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).

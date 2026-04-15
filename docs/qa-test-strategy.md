@@ -1,6 +1,21 @@
 # QA & Test Strategy — apiManager
 > Updated: 2026-04-05 | Refresh when tests, auth, or proxy behavior changes.
 
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+![Backend](https://img.shields.io/badge/backend-Bun%20%2B%20Elysia-f472b6)
+![Testing](https://img.shields.io/badge/testing-bun%3Atest-f59e0b)
+
+## Table of Contents
+- [0. Baseline: Current Test Coverage](#0-baseline-current-test-coverage)
+- [1. High-Risk Workflows](#1-high-risk-workflows-priority-ordered)
+- [2. Test Plan](#2-test-plan)
+- [3. Definition of Done](#3-definition-of-done)
+- [4. Release Checklist](#4-release-checklist)
+- [5. Tooling Decision](#5-tooling-decision)
+- [6. Observability / Verification Gaps](#6-observability--verification-gaps)
+- [7. Known Bugs Found During Review](#7-known-bugs-found-during-review)
+- [Footer](#footer)
+
 ---
 
 ## 0. Baseline: Current Test Coverage
@@ -14,6 +29,8 @@ Current committed coverage includes:
 - `src/utils/network.test.ts`
 
 The biggest remaining QA risk is still limited coverage around auth flows, RBAC/org isolation, reports, and the proxy authorization matrix.
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -85,6 +102,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | DB stores UTC; `REPORT_TZ = "Africa/Johannesburg"` (SAST = UTC+2, no DST) — but `parseDate` uses Luxon `fromISO` in REPORT_TZ then `toUTC()` for SQL | `reports.ts:22,toUtcSql` |
 | `getNowSast()` in `access.ts` and window evaluation uses wall-clock in SAST — server time zone drift would silently widen/shrink access windows | `access.ts:30` |
 | `isSessionExpired` compares `DateTime.utc()` vs `fromSQL(last_activity_utc, {zone: "utc"})` — assumes DB string is UTC. Any manual DB edit in local time would grant extra idle time | `sessions.ts:67-75` |
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -163,6 +182,8 @@ Low priority until integration suite is green. Smoke tests only:
 - Archive user → user is inactive
 - Report page loads with data
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 3. Definition of Done
@@ -178,6 +199,8 @@ A release is ready when:
 - [ ] All new endpoints covered by at least one happy-path integration test
 - [ ] UTC timestamps verified for any new time-related code
 - [ ] `AGENTS.md` updated if new test commands are added
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -196,6 +219,8 @@ A release is ready when:
 [ ] Confirm archived user cannot proxy-authenticate
 [ ] Confirm uninstall.sh --purge does not affect running services
 ```
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -221,6 +246,8 @@ A release is ready when:
 }
 ```
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 6. Observability / Verification Gaps
@@ -233,6 +260,8 @@ A release is ready when:
 | Session `touchSession` is fire-and-forget — DB write failure is silent | Session appears active but activity not tracked | Await and log errors |
 | No request ID / correlation ID in proxy or admin API | Cannot correlate access log with upstream trace | Add `X-Request-Id` header on ingress |
 | Report BigInt overflow | Silent wrong totals above 9PB | Validate or use BigInt throughout |
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -247,3 +276,12 @@ A release is ready when:
 | BUG-05 | Low | `proxy.ts:logout` | Bearer-token logout does not revoke the token in DB, only clears cookie |
 | BUG-06 | Low | `windows.ts:43` | Race condition retrieving last inserted window ID via `ORDER BY id DESC` |
 | BUG-07 | Low | `access.ts:33` | `parseTimeToMinutes` second-rounding not documented; inconsistent with DB `time` type precision |
+
+[Go to TOC](#table-of-contents)
+
+---
+
+## Footer
+
+This page is licensed under the
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).

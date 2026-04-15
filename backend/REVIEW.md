@@ -1,6 +1,18 @@
 # Backend Architecture Review — api-manager
 Reviewed: 2026-03-26 | Read-only | No modifications made
 
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+![Backend](https://img.shields.io/badge/backend-Bun%20%2B%20Elysia%20%2B%20Drizzle-f472b6)
+![DB](https://img.shields.io/badge/db-MariaDB-003545)
+
+## Table of Contents
+- [1. Architecture Overview](#1-architecture-overview)
+- [2. Strengths](#2-strengths)
+- [3. Concrete Risks / Bugs](#3-concrete-risks--bugs)
+- [4. Missing Tests and Documentation](#4-missing-tests-and-documentation)
+- [5. Top-Priority Recommendations](#5-top-priority-recommendations)
+- [Footer](#footer)
+
 ---
 
 ## 1. Architecture Overview
@@ -31,6 +43,8 @@ DB split — two patterns coexist:
   - src/db/client.ts (Drizzle + mysql2 pool) — routes, logging, bootstrap
   - import { query } from './db' — sessions.ts and access.ts (THIS MODULE IS MISSING — see R1)
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 2. Strengths
@@ -45,6 +59,8 @@ DB split — two patterns coexist:
 8. UTC-everywhere discipline — all timestamps stored as UTC strings via Luxon.
 9. Bootstrap idempotency — waitForDb, ensureGlobalOrg, ensureBootstrapAdmin without duplication.
 10. bcryptjs cost-10 hashing; password min-length 8 enforced in Elysia validation schema.
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -137,6 +153,8 @@ R16 — X-Forwarded-For trusted unconditionally
   File: src/proxy.ts getClientIp()
   Safe behind Caddy, but a risk if backend is ever directly exposed.
 
+[Go to TOC](#table-of-contents)
+
 ---
 
 ## 4. Missing Tests and Documentation
@@ -149,6 +167,8 @@ R16 — X-Forwarded-For trusted unconditionally
 - No README for backend — no env var docs, DB setup, TLS, or migration instructions.
 - requireRole is undocumented and unused — misleads future contributors.
 - No CHANGELOG despite version 0.2.0.
+
+[Go to TOC](#table-of-contents)
 
 ---
 
@@ -166,3 +186,12 @@ R16 — X-Forwarded-For trusted unconditionally
 | 8 | MEDIUM | Add OpenAPI response schemas using Elysia t.Object response typing |
 | 9 | MEDIUM | Add integration tests: login, session expiry, proxy matrix, archive/restore |
 | 10 | MEDIUM | Normalize login errors to prevent user enumeration |
+
+[Go to TOC](#table-of-contents)
+
+---
+
+## Footer
+
+This page is licensed under the
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
