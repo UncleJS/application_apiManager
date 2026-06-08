@@ -11,6 +11,7 @@ import type { ResultSetHeader } from "mysql2/promise";
 import type { AuthUser } from "../middleware/authenticate";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
+import { WindowList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type WindowsQuery = {
   subjectType?: string;
@@ -99,7 +100,7 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
       sql`SELECT id, subject_type, subject_id, day_of_week, start_time, end_time, is_active, created_at_utc FROM access_windows WHERE subject_type = ${subjectType} AND subject_id = ${subjectId}`
     );
     return serializeUtcFields({ items: rows[0] });
-  })
+  }, { response: { 200: WindowList, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } })
   .post(
     "/",
     async (context) => {
@@ -140,7 +141,8 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
         dayOfWeek: t.Number({ minimum: 1, maximum: 7 }),
         startTime: t.String(),
         endTime: t.String()
-      })
+      }),
+      response: { 201: IdResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors }
     }
   )
   .put(
@@ -185,7 +187,8 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
         startTime: t.Optional(t.String()),
         endTime: t.Optional(t.String()),
         isActive: t.Optional(t.Boolean())
-      })
+      }),
+      response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors }
     }
   )
   .post("/:id/archive", async (context) => {
@@ -208,4 +211,4 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
       createdAtUtc: nowUtc()
     });
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } });

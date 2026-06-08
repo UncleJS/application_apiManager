@@ -8,6 +8,7 @@ import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
+import { OrgList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type OrgBody = {
   name?: string;
@@ -43,7 +44,7 @@ export const orgsPlugin = new Elysia({ prefix: "/orgs" })
       );
 
     return serializeUtcFields({ items: rows[0] });
-  })
+  }, { response: { 200: OrgList, ...authErrors } })
   .post(
     "/",
     async (context) => {
@@ -70,7 +71,10 @@ export const orgsPlugin = new Elysia({ prefix: "/orgs" })
       set.status = 201;
       return { id: createdId };
     },
-    { body: t.Object({ name: t.String({ minLength: 2 }) }) }
+    {
+      body: t.Object({ name: t.String({ minLength: 2 }) }),
+      response: { 201: IdResponse, 400: ErrorResponse, ...authErrors }
+    }
   )
   .put(
     "/:id",
@@ -109,7 +113,8 @@ export const orgsPlugin = new Elysia({ prefix: "/orgs" })
       body: t.Object({
         name: t.Optional(t.String({ minLength: 2 })),
         statusId: t.Optional(t.Number())
-      })
+      }),
+      response: { 200: OkResponse, 400: ErrorResponse, ...authErrors }
     }
   )
   .post("/:id/archive", async (context) => {
@@ -132,4 +137,4 @@ export const orgsPlugin = new Elysia({ prefix: "/orgs" })
       createdAtUtc: now
     });
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse, 400: ErrorResponse, ...authErrors } });

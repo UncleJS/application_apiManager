@@ -9,6 +9,7 @@ import { requireRole } from "../middleware/requireRole";
 import { assertSafeTargetUrl } from "../utils/network";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
+import { ApiList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 const RESERVED_BASE_PATHS = [
   "/auth",
@@ -96,7 +97,7 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
       sql`SELECT DISTINCT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id LEFT JOIN user_api_permissions p ON a.id = p.api_id WHERE a.organization_id = ${authUser.organizationId} AND (a.is_public = 1 OR p.user_id = ${authUser.id})`
     );
     return serializeUtcFields({ items: rows[0] });
-  })
+  }, { response: { 200: ApiList, ...authErrors } })
   .post(
     "/",
     async (context) => {
@@ -156,7 +157,8 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
         isPublic: t.Boolean(),
         isEnabled: t.Optional(t.Boolean()),
         alwaysOn: t.Optional(t.Boolean())
-      })
+      }),
+      response: { 201: IdResponse, 400: ErrorResponse, 409: ErrorResponse, ...authErrors }
     }
   )
   .put(
@@ -244,7 +246,8 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
         isEnabled: t.Optional(t.Boolean()),
         alwaysOn: t.Optional(t.Boolean()),
         organizationId: t.Optional(t.Number())
-      })
+      }),
+      response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, ...authErrors }
     }
   )
   .post("/:id/archive", async (context) => {
@@ -272,4 +275,4 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
       createdAtUtc: now
     });
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } });

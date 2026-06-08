@@ -7,6 +7,7 @@ import { requireRole } from "../middleware/requireRole";
 import { query as dbQuery, type QueryValue } from "../db/index";
 import { serializeUtcFields } from "../utils/datetime";
 import type { ProtectedContext } from "../types/http";
+import { SessionList, OkResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type SessionsQuery = {
   userId?: string;
@@ -79,7 +80,7 @@ export const sessionsPlugin = new Elysia({ prefix: "/sessions" })
     }));
 
     return serializeUtcFields({ items });
-  })
+  }, { response: { 200: SessionList, 400: ErrorResponse, ...authErrors } })
   .post("/:id/revoke", async (context) => {
     const { params, authUser, _authError, set } = context as unknown as ProtectedContext<Record<string, unknown>, unknown, SessionParams>;
     if (!authUser) { set.status = 401; return _authError; }
@@ -102,4 +103,4 @@ export const sessionsPlugin = new Elysia({ prefix: "/sessions" })
 
     await revokeSession(sessionId);
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } });

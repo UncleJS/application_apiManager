@@ -9,6 +9,7 @@ import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { query, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
+import { UserList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type UserBody = {
   username?: string;
@@ -50,7 +51,7 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
       sql`SELECT u.id, u.username, u.organization_id, u.role_id, r.name as role_name, u.status_id, s.name as status_name, u.created_at_utc, u.updated_at_utc FROM users u JOIN roles r ON u.role_id = r.id JOIN user_statuses s ON u.status_id = s.id WHERE ${authUser.role} = 'global_admin' OR u.organization_id = ${authUser.organizationId}`
     );
     return serializeUtcFields({ items: rows[0] });
-  })
+  }, { response: { 200: UserList, ...authErrors } })
   .post(
     "/",
     async (context) => {
@@ -105,7 +106,8 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
         password: t.String({ minLength: 8 }),
         organizationId: t.Number(),
         roleId: t.Number()
-      })
+      }),
+      response: { 201: IdResponse, 400: ErrorResponse, ...authErrors }
     }
   )
   .put(
@@ -179,7 +181,8 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
         organizationId: t.Optional(t.Number()),
         roleId: t.Optional(t.Number()),
         statusId: t.Optional(t.Number())
-      })
+      }),
+      response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors }
     }
   )
   .post("/:id/archive", async (context) => {
@@ -213,4 +216,4 @@ export const usersPlugin = new Elysia({ prefix: "/users" })
       createdAtUtc: now
     });
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } });

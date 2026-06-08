@@ -16,6 +16,7 @@ import { authenticatePlugin } from "./middleware/authenticate";
 import { handleProxy } from "./proxy";
 import type { ProtectedContext } from "./types/http";
 import { pool } from "./db/client";
+import { RootResponse, StatusResponse } from "./schemas/responses";
 
 // Flipped true once bootstrap completes and the server is listening; gates /readyz.
 let ready = false;
@@ -55,9 +56,9 @@ async function start() {
       message: "API Manager backend is running",
       auth: "/auth/login",
       docs: "/docs"
-    }))
+    }), { response: { 200: RootResponse } })
     // Liveness: process is up and serving. Cheap, no dependencies.
-    .get("/healthz", () => ({ status: "ok" }))
+    .get("/healthz", () => ({ status: "ok" }), { response: { 200: StatusResponse } })
     // Readiness: only "ready" once bootstrap finished AND the DB answers. Lets the
     // orchestrator hold traffic until the schema/seed work is done, distinct from
     // liveness (a slow first boot is not a crash).
@@ -73,7 +74,7 @@ async function start() {
         set.status = 503;
         return { status: "db_unavailable" };
       }
-    })
+    }, { response: { 200: StatusResponse, 503: StatusResponse } })
     // ── auth (public) ──────────────────────────────────────────────────────────
     .use(authPlugin)
     // ── protected routes ──────────────────────────────────────────────────────
@@ -87,8 +88,8 @@ async function start() {
     .guard(
       {
         beforeHandle(context) {
-          const { _authError, set } = context as unknown as ProtectedContext;
-          if (_authError) {
+          const { authUser, _authError, set } = context as unknown as ProtectedContext;
+          if (!authUser) {
             if (!set.status || Number(set.status) < 400) {
               set.status = 401;
             }

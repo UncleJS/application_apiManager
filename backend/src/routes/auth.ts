@@ -7,6 +7,7 @@ import { buildCookie, parseCookies } from "../utils/cookies";
 import { config } from "../config";
 import { createSession, revokeSessionByToken, SESSION_COOKIE } from "../sessions";
 import { authenticatePlugin } from "../middleware/authenticate";
+import { OkResponse, MeResponse, ErrorResponse } from "../schemas/responses";
 
 type LoginRow = {
   id: number;
@@ -65,16 +66,18 @@ export const authPlugin = new Elysia({ prefix: "/auth" })
       body: t.Object({
         username: t.String({ minLength: 1 }),
         password: t.String({ minLength: 1 })
-      })
+      }),
+      response: { 200: OkResponse, 401: ErrorResponse }
     }
   )
   .use(authenticatePlugin)
-  .get("/me", ({ authUser, _authError }) => {
+  .get("/me", ({ authUser, _authError, set }) => {
     if (!authUser) {
-      return _authError;
+      set.status = 401;
+      return _authError!;
     }
     return { user: authUser };
-  })
+  }, { response: { 200: MeResponse, 401: ErrorResponse } })
   .post("/logout", async ({ headers, set }) => {
     const authHeaderValue = headers.authorization;
     const authHeader = Array.isArray(authHeaderValue) ? authHeaderValue[0] : authHeaderValue;
@@ -97,4 +100,4 @@ export const authPlugin = new Elysia({ prefix: "/auth" })
     });
 
     return { ok: true };
-  });
+  }, { response: { 200: OkResponse } });

@@ -6,6 +6,7 @@ import { logAudit } from "../logging";
 import { nowUtc } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import type { ProtectedContext } from "../types/http";
+import { PermissionList, OkResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type PermissionsQuery = {
   userId?: string;
@@ -51,7 +52,7 @@ export const permissionsPlugin = new Elysia({ prefix: "/permissions" })
     const rows = await db.execute(sql`SELECT api_id FROM user_api_permissions WHERE user_id = ${userId}`);
     const data = rows[0] as unknown as { api_id: number }[];
     return { items: data.map((row) => row.api_id) };
-  })
+  }, { response: { 200: PermissionList, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } })
   .post(
     "/assign",
     async (context) => {
@@ -82,7 +83,10 @@ export const permissionsPlugin = new Elysia({ prefix: "/permissions" })
       });
       return { ok: true };
     },
-    { body: t.Object({ userId: t.Number(), apiId: t.Number() }) }
+    {
+      body: t.Object({ userId: t.Number(), apiId: t.Number() }),
+      response: { 200: OkResponse, 404: ErrorResponse, ...authErrors }
+    }
   )
   .post(
     "/unassign",
@@ -113,5 +117,8 @@ export const permissionsPlugin = new Elysia({ prefix: "/permissions" })
       });
       return { ok: true };
     },
-    { body: t.Object({ userId: t.Number(), apiId: t.Number() }) }
+    {
+      body: t.Object({ userId: t.Number(), apiId: t.Number() }),
+      response: { 200: OkResponse, 404: ErrorResponse, ...authErrors }
+    }
   );

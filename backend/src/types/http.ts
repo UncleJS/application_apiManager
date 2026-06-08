@@ -17,7 +17,10 @@ export type ProtectedContext<
   body: TBody;
   params: TParams;
   authUser: AuthUser | null;
-  _authError: ErrorPayload | null;
+  // Non-null by construction: the authenticate derive always pairs a null
+  // authUser with a populated _authError, and handlers only ever return
+  // _authError inside their `if (!authUser)` branch.
+  _authError: ErrorPayload;
   set: ResponseSet;
   headers: HeaderMap;
 };

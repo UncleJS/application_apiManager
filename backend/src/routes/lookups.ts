@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { db } from "../db/client";
 import { sql } from "drizzle-orm";
 import type { ProtectedContext } from "../types/http";
+import { LookupsResponse, authErrors } from "../schemas/responses";
 
 export const lookupsPlugin = new Elysia({ prefix: "/lookups" })
   .get("/", async (context) => {
@@ -15,4 +16,4 @@ export const lookupsPlugin = new Elysia({ prefix: "/lookups" })
       userStatuses: userStatuses[0],
       orgStatuses: orgStatuses[0]
     };
-  });
+  }, { response: { 200: LookupsResponse, ...authErrors } });

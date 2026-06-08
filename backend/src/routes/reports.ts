@@ -4,6 +4,7 @@ import { toUtcIso, toUtcSql } from "../utils/datetime";
 import { buildError } from "../utils/errors";
 import { query as dbQuery, type QueryValue } from "../db/index";
 import type { ProtectedContext } from "../types/http";
+import { ReportResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 const REPORT_TZ = "Africa/Johannesburg";
 
@@ -213,7 +214,7 @@ export const reportsPlugin = new Elysia({ prefix: "/reports" })
     const { start, end } = range;
     const rows = await dbQuery<AggregateRow[]>(ORG_QUERY, [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId] as QueryValue[]);
     return { range: { start: toUtcIso(toUtcSql(start)), end: toUtcIso(toUtcSql(end)) }, ...withTotals(rows) };
-  })
+  }, { response: { 200: ReportResponse, 400: ErrorResponse, ...authErrors } })
   .get("/orgs/monthly", async (context) => {
     const { query: queryParams, authUser, _authError, set } = context as unknown as ProtectedContext<ReportsQuery>;
     if (!authUser) { set.status = 401; return _authError; }
@@ -223,7 +224,7 @@ export const reportsPlugin = new Elysia({ prefix: "/reports" })
     const { start, end } = range;
     const rows = await dbQuery<AggregateRow[]>(ORG_QUERY, [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId] as QueryValue[]);
     return { range: { start: toUtcIso(toUtcSql(start)), end: toUtcIso(toUtcSql(end)) }, ...withTotals(rows) };
-  })
+  }, { response: { 200: ReportResponse, 400: ErrorResponse, ...authErrors } })
   .get("/users/weekly", async (context) => {
     const { query: queryParams, authUser, _authError, set } = context as unknown as ProtectedContext<ReportsQuery>;
     if (!authUser) { set.status = 401; return _authError; }
@@ -233,7 +234,7 @@ export const reportsPlugin = new Elysia({ prefix: "/reports" })
     const { start, end } = range;
     const rows = await dbQuery<AggregateRow[]>(USER_QUERY, [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId] as QueryValue[]);
     return { range: { start: toUtcIso(toUtcSql(start)), end: toUtcIso(toUtcSql(end)) }, ...withTotals(rows) };
-  })
+  }, { response: { 200: ReportResponse, 400: ErrorResponse, ...authErrors } })
   .get("/users/monthly", async (context) => {
     const { query: queryParams, authUser, _authError, set } = context as unknown as ProtectedContext<ReportsQuery>;
     if (!authUser) { set.status = 401; return _authError; }
@@ -243,4 +244,4 @@ export const reportsPlugin = new Elysia({ prefix: "/reports" })
     const { start, end } = range;
     const rows = await dbQuery<AggregateRow[]>(USER_QUERY, [toUtcSql(start), toUtcSql(end), authUser.role, authUser.organizationId] as QueryValue[]);
     return { range: { start: toUtcIso(toUtcSql(start)), end: toUtcIso(toUtcSql(end)) }, ...withTotals(rows) };
-  });
+  }, { response: { 200: ReportResponse, 400: ErrorResponse, ...authErrors } });
