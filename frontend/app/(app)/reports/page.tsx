@@ -50,7 +50,7 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
   return (
     <div className="space-y-2">
       {report.range.start && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-foreground/70">
           {report.range.start} → {report.range.end}
         </p>
       )}
@@ -67,7 +67,7 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
         <TableBody>
           {report.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No data.</TableCell>
+              <TableCell colSpan={5} className="text-center py-8 text-foreground/70">No data.</TableCell>
             </TableRow>
           )}
           {report.items.map((row, i) => (
@@ -76,17 +76,17 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
               <TableCell className="text-right text-primary font-mono">{fmt(row.allowed_count)}</TableCell>
               <TableCell className="text-right text-red-400 font-mono">{fmt(row.denied_count)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(row.total_count)}</TableCell>
-              <TableCell className="text-right font-mono text-muted-foreground">{fmtBytes(row.total_bytes_total)}</TableCell>
+              <TableCell className="text-right font-mono text-foreground/70">{fmtBytes(row.total_bytes_total)}</TableCell>
             </TableRow>
           ))}
           {/* Totals row */}
           {report.items.length > 0 && (
             <TableRow className="border-t-2 border-border bg-muted/30 font-semibold">
-              <TableCell className="text-muted-foreground">Totals</TableCell>
+              <TableCell className="text-foreground/70">Totals</TableCell>
               <TableCell className="text-right text-primary font-mono">{fmt(report.totals.allowed_count)}</TableCell>
               <TableCell className="text-right text-red-400 font-mono">{fmt(report.totals.denied_count)}</TableCell>
               <TableCell className="text-right font-mono">{fmt(report.totals.total_count)}</TableCell>
-              <TableCell className="text-right font-mono text-muted-foreground">{fmtBytes(report.totals.total_bytes_total)}</TableCell>
+              <TableCell className="text-right font-mono text-foreground/70">{fmtBytes(report.totals.total_bytes_total)}</TableCell>
             </TableRow>
           )}
         </TableBody>

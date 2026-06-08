@@ -7,8 +7,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_NAME="api-manager"
 SYSTEMD_DIR="$HOME/.config/containers/systemd"
 QUADLET_SRC="$ROOT_DIR/.quadlet/api-manager-dev.container"
+# Quadlet EnvironmentFile= points at the repo-local .env directly (no host copy).
 ENV_FILE="$ROOT_DIR/.env"
-ENV_DEST="$SYSTEMD_DIR/api-manager.env"
 PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
 step() { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
@@ -77,12 +77,10 @@ fi
 mkdir -p "$SYSTEMD_DIR"
 if [ -f "$ENV_FILE" ]; then
   normalize_env_file "$ENV_FILE"
-  cp "$ENV_FILE" "$ENV_DEST"
-  normalize_env_file "$ENV_DEST"
-  chmod 600 "$ENV_DEST"
+  chmod 600 "$ENV_FILE"
 fi
 cp "$QUADLET_SRC" "$SYSTEMD_DIR/api-manager-dev.container"
-sed -i "s|%h/.config/containers/systemd/api-manager.env|$ENV_DEST|g" "$SYSTEMD_DIR/api-manager-dev.container"
+sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$SYSTEMD_DIR/api-manager-dev.container"
 
 if [ ! -f "$SYSTEMD_DIR/api-manager-pod.pod" ]; then
   cp "$ROOT_DIR/.quadlet/api-manager-pod.pod" "$SYSTEMD_DIR/api-manager-pod.pod"

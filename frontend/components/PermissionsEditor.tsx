@@ -53,9 +53,9 @@ export default function PermissionsEditor({ userId, organizationId }: Props) {
     }
   };
 
-  if (loading) return <p className="text-sm text-muted-foreground">Loading permissions…</p>;
+  if (loading) return <p className="text-sm text-foreground/70">Loading permissions…</p>;
   if (error) return <p className="text-sm text-destructive">{error}</p>;
-  if (apis.length === 0) return <p className="text-sm text-muted-foreground">No APIs in this organisation.</p>;
+  if (apis.length === 0) return <p className="text-sm text-foreground/70">No APIs in this organisation.</p>;
 
   return (
     <div className="space-y-2">

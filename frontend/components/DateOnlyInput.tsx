@@ -87,14 +87,14 @@ export default function DateOnlyInput({
         className={cn(
           "flex h-9 w-full rounded-md border border-border bg-input px-3 py-1 pr-10 font-mono text-sm",
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-          "placeholder:text-muted-foreground",
+          "placeholder:text-foreground/70",
         )}
       />
       <button
         type="button"
         onClick={openPicker}
         aria-label="Open date picker"
-        className="absolute right-0 top-0 inline-flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+        className="absolute right-0 top-0 inline-flex h-9 w-9 items-center justify-center text-foreground/70 transition-colors hover:text-foreground"
       >
         <CalendarDays className="h-4 w-4" />
       </button>

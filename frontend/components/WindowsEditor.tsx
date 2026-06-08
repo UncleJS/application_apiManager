@@ -76,7 +76,7 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
 
       <div className="flex flex-wrap gap-3 items-end">
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Day</label>
+          <label className="text-xs text-foreground/70">Day</label>
           <SelectNative
             value={day}
             onChange={(e) => setDay(Number(e.target.value))}
@@ -90,11 +90,11 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
           </SelectNative>
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Start</label>
+          <label className="text-xs text-foreground/70">Start</label>
           <TimeSelector value={start} onChange={setStart} className="w-24" />
         </div>
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">End</label>
+          <label className="text-xs text-foreground/70">End</label>
           <TimeSelector value={end} onChange={setEnd} className="w-24" />
         </div>
         <Button onClick={handleAdd} disabled={adding} size="sm">
@@ -102,11 +102,11 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
         </Button>
       </div>
 
-      {loading && <p className="text-sm text-muted-foreground">Loading windows…</p>}
+      {loading && <p className="text-sm text-foreground/70">Loading windows…</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {!loading && items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No windows configured.</p>
+        <p className="text-sm text-foreground/70">No windows configured.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -125,7 +125,7 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
                 <TableCell className="font-mono">{w.start_time}</TableCell>
                 <TableCell className="font-mono">{w.end_time}</TableCell>
                 <TableCell>
-                  <span className={w.is_active ? "text-primary text-xs" : "text-muted-foreground text-xs"}>
+                  <span className={w.is_active ? "text-primary text-xs" : "text-foreground/70 text-xs"}>
                     {w.is_active ? "Active" : "Archived"}
                   </span>
                 </TableCell>
@@ -135,7 +135,7 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleArchive(w.id)}
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      className="h-7 w-7 text-foreground/70 hover:text-destructive"
                       aria-label={`Archive window for ${DAY_OPTIONS.find((d) => d.value === w.day_of_week)?.label ?? "day"}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

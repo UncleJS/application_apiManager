@@ -8,7 +8,7 @@ Image=docker.io/library/mariadb:11.4
 ContainerName=api-manager-mariadb
 Pod=api-manager-pod.pod
 Volume=api-manager-db.volume:/var/lib/mysql:Z
-EnvironmentFile=%h/.config/containers/systemd/api-manager.env
+EnvironmentFile=__REPO_ENV__
 HealthCmd=sh -lc 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-admin ping -h 127.0.0.1 -u root --silent'
 HealthInterval=10s
 HealthTimeout=5s

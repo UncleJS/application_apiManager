@@ -28,6 +28,9 @@ node-compile-cache/
 # OS/editor
 .DS_Store
 
+# Local agent/tooling state
+.claude/
+
 # Credential / secret config files
 secrets.json
 secrets.*.json

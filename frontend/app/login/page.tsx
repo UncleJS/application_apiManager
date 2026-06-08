@@ -40,7 +40,7 @@ function LoginForm() {
             </div>
           </div>
           <h1 className="text-2xl font-bold tracking-tight">API Manager</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your account</p>
+          <p className="text-sm text-foreground/70">Sign in to your account</p>
         </div>
 
         <Card>

@@ -60,7 +60,7 @@ export default function Sidebar({ user }: Props) {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                 active
                   ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  : "text-foreground/70 hover:bg-accent hover:text-foreground"
               )}
             >
               <item.icon className="h-4 w-4 flex-shrink-0" />
@@ -73,13 +73,13 @@ export default function Sidebar({ user }: Props) {
       {/* User + Logout */}
       <div className="border-t border-border p-3 space-y-2">
         <div className="px-3 py-1">
-          <p className="text-xs text-muted-foreground truncate">{user.username}</p>
+          <p className="text-xs text-foreground/70 truncate">{user.username}</p>
           <p className="text-xs text-primary/70 capitalize">{role.replace(/_/g, " ")}</p>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
+          className="w-full justify-start gap-2 text-foreground/70 hover:text-destructive"
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4" />

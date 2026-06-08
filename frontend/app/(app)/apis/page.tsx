@@ -165,16 +165,16 @@ export default function ApisPage() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-foreground/70">Loading…</TableCell></TableRow>
               )}
               {!loading && apis.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No APIs found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-foreground/70">No APIs found.</TableCell></TableRow>
               )}
               {apis.map((api) => (
                 <Fragment key={api.id}>
                   <TableRow>
                     <TableCell className="font-medium">{api.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{api.base_path}</TableCell>
+                    <TableCell className="font-mono text-xs text-foreground/70">{api.base_path}</TableCell>
                     <TableCell>{api.organization_name}</TableCell>
                     <TableCell>
                       <Badge variant={api.is_public ? "success" : "secondary"}>
@@ -195,7 +195,7 @@ export default function ApisPage() {
                             </Button>
                             <Button
                               variant="ghost" size="sm"
-                              className={expandedId === api.id ? "text-primary" : "text-muted-foreground"}
+                              className={expandedId === api.id ? "text-primary" : "text-foreground/70"}
                               onClick={() => toggleExpand(api.id)}
                             >
                               Windows {expandedId === api.id ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}

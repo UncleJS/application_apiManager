@@ -171,10 +171,10 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-foreground/70">Loading…</TableCell></TableRow>
               )}
               {!loading && users.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No users found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-foreground/70">No users found.</TableCell></TableRow>
               )}
               {users.map((u) => (
                 <Fragment key={u.id}>
@@ -196,14 +196,14 @@ export default function UsersPage() {
                         </Button>
                         <Button
                           variant="ghost" size="sm"
-                          className={expandedId === u.id && expandedTab === "permissions" ? "text-primary" : "text-muted-foreground"}
+                          className={expandedId === u.id && expandedTab === "permissions" ? "text-primary" : "text-foreground/70"}
                           onClick={() => toggleExpand(u.id, "permissions")}
                         >
                           Perms {expandedId === u.id && expandedTab === "permissions" ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
                         </Button>
                         <Button
                           variant="ghost" size="sm"
-                          className={expandedId === u.id && expandedTab === "windows" ? "text-primary" : "text-muted-foreground"}
+                          className={expandedId === u.id && expandedTab === "windows" ? "text-primary" : "text-foreground/70"}
                           onClick={() => toggleExpand(u.id, "windows")}
                         >
                           Windows {expandedId === u.id && expandedTab === "windows" ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}

@@ -9,7 +9,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 QUADLET_DIR="$ROOT_DIR/.quadlet"
 SYSTEMD_DIR="$HOME/.config/containers/systemd"
 ENV_FILE="$ROOT_DIR/.env"
-ENV_DEST="$SYSTEMD_DIR/api-manager.env"
+# Per project standard, Quadlet EnvironmentFile= references the repo-local .env
+# directly — no host-level copy under ~/.config/containers/systemd/.
+ENV_DEST="$ENV_FILE"
 CADDYFILE="$ROOT_DIR/infra/caddy/Caddyfile"
 PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
@@ -18,6 +20,23 @@ green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
+
+# ── argument parsing ──────────────────────────────────────────────────────────
+# Linger keeps user services running after logout / across reboots. It changes
+# host user state, so it is opt-in rather than silently enabled.
+LINGER_MODE="ask"   # ask | yes | no
+for arg in "$@"; do
+  case "$arg" in
+    --enable-linger) LINGER_MODE="yes" ;;
+    --no-linger)     LINGER_MODE="no" ;;
+    -h|--help)
+      printf 'Usage: %s [--enable-linger|--no-linger]\n' "$(basename "$0")"
+      printf '  --enable-linger  Enable systemd linger (boot persistence) without prompting\n'
+      printf '  --no-linger      Skip enabling linger\n'
+      exit 0 ;;
+    *) red "Unknown argument: $arg"; exit 1 ;;
+  esac
+done
 
 normalize_env_file() {
   "$PYTHON_BIN" - "$1" <<'PY'
@@ -93,20 +112,31 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 # ── linger ────────────────────────────────────────────────────────────────────
-step "Enabling linger for $USER (boot persistence)"
-loginctl enable-linger "$USER"
+if [ "$LINGER_MODE" = "ask" ]; then
+  if [ -t 0 ]; then
+    read -rp "Enable systemd linger for $USER (keeps services running across reboots/logout)? [y/N] " _ans
+    case "$_ans" in [yY]|[yY][eE][sS]) LINGER_MODE="yes" ;; *) LINGER_MODE="no" ;; esac
+  else
+    LINGER_MODE="no"   # non-interactive default: do not change host user state silently
+  fi
+fi
+
+if [ "$LINGER_MODE" = "yes" ]; then
+  step "Enabling linger for $USER (boot persistence)"
+  loginctl enable-linger "$USER"
+else
+  yellow "Skipping linger. Services will not auto-start on boot. Re-run with --enable-linger to enable, or: loginctl enable-linger $USER"
+fi
 
 # ── systemd user dir ──────────────────────────────────────────────────────────
 step "Preparing systemd user unit directory"
 mkdir -p "$SYSTEMD_DIR"
 
-# Copy env file so systemd can find it at the canonical path
-cp "$ENV_FILE" "$ENV_DEST"
+# Normalise the repo-local .env in place and lock it down; Quadlet units read it
+# directly (no host-level copy).
 normalize_env_file "$ENV_FILE"
-cp "$ENV_FILE" "$ENV_DEST"
-normalize_env_file "$ENV_DEST"
-chmod 600 "$ENV_DEST"
-green "  Env copied → $ENV_DEST"
+chmod 600 "$ENV_FILE"
+green "  Using repo-local env → $ENV_FILE"
 
 # ── copy + patch Quadlet units ────────────────────────────────────────────────
 step "Installing runtime Quadlet units → $SYSTEMD_DIR"
@@ -124,8 +154,8 @@ for unit in \
   "$QUADLET_DIR"/api-manager-edge.container; do
   dest="$SYSTEMD_DIR/$(basename "$unit")"
   cp "$unit" "$dest"
-  # Replace placeholder %h/.config/... EnvironmentFile with the resolved path
-  sed -i "s|%h/.config/containers/systemd/api-manager.env|$ENV_DEST|g" "$dest"
+  # Resolve the __REPO_ENV__ placeholder to the absolute repo-local .env path
+  sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$dest"
   green "  $(basename "$unit")"
 done
 

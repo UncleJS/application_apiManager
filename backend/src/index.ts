@@ -14,6 +14,11 @@ import { sessionsPlugin } from "./routes/sessions";
 import { lookupsPlugin } from "./routes/lookups";
 import { authenticatePlugin } from "./middleware/authenticate";
 import { handleProxy } from "./proxy";
+import type { ProtectedContext } from "./types/http";
+import { pool } from "./db/client";
+
+// Flipped true once bootstrap completes and the server is listening; gates /readyz.
+let ready = false;
 
 async function start() {
   await runBootstrap();
@@ -51,19 +56,57 @@ async function start() {
       auth: "/auth/login",
       docs: "/docs"
     }))
+    // Liveness: process is up and serving. Cheap, no dependencies.
     .get("/healthz", () => ({ status: "ok" }))
+    // Readiness: only "ready" once bootstrap finished AND the DB answers. Lets the
+    // orchestrator hold traffic until the schema/seed work is done, distinct from
+    // liveness (a slow first boot is not a crash).
+    .get("/readyz", async ({ set }) => {
+      if (!ready) {
+        set.status = 503;
+        return { status: "starting" };
+      }
+      try {
+        await pool.query("SELECT 1");
+        return { status: "ok" };
+      } catch {
+        set.status = 503;
+        return { status: "db_unavailable" };
+      }
+    })
     // ── auth (public) ──────────────────────────────────────────────────────────
     .use(authPlugin)
     // ── protected routes ──────────────────────────────────────────────────────
     .use(authenticatePlugin)
-    .use(orgsPlugin)
-    .use(usersPlugin)
-    .use(apisPlugin)
-    .use(permissionsPlugin)
-    .use(windowsPlugin)
-    .use(reportsPlugin)
-    .use(sessionsPlugin)
-    .use(lookupsPlugin)
+    // Authoritative auth gate: `authenticatePlugin` derives `authUser`/`_authError`
+    // but (being global, it also runs for the public proxy) cannot itself abort.
+    // This guard short-circuits any request that failed authentication BEFORE the
+    // handler runs, so a route that forgets its own `if (!authUser)` check can
+    // never reach handler logic with a null user. Per-route checks remain as
+    // defense-in-depth. The status (401/403) is already set by the derive.
+    .guard(
+      {
+        beforeHandle(context) {
+          const { _authError, set } = context as unknown as ProtectedContext;
+          if (_authError) {
+            if (!set.status || Number(set.status) < 400) {
+              set.status = 401;
+            }
+            return _authError;
+          }
+        }
+      },
+      (app) =>
+        app
+          .use(orgsPlugin)
+          .use(usersPlugin)
+          .use(apisPlugin)
+          .use(permissionsPlugin)
+          .use(windowsPlugin)
+          .use(reportsPlugin)
+          .use(sessionsPlugin)
+          .use(lookupsPlugin)
+    )
     // ── reverse proxy (catch-all) ─────────────────────────────────────────────
     .all("/*", handleProxy)
     .listen({
@@ -73,6 +116,31 @@ async function start() {
 
   console.log(`API Manager internal HTTP running at http://${config.host}:${config.port}`);
   console.log("Public API/Swagger is expected via Caddy on https://localhost:55001");
+
+  ready = true;
+
+  // Graceful shutdown: stop accepting new requests, give in-flight work a brief
+  // moment, then close the DB pool so connections drain cleanly. The Quadlet unit
+  // sets TimeoutStopSec, which bounds how long systemd waits for this.
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    ready = false;
+    console.log(`Received ${signal}, shutting down gracefully…`);
+    try {
+      await app.stop();
+      await pool.end();
+    } catch (error) {
+      console.error("Error during shutdown:", error);
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 
   return app;
 }

@@ -1,30 +1,32 @@
-# Stage 1 — build
-FROM node:20-alpine AS builder
+# Stage 1 — build (Bun)
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN bun run build
 
-# Stage 2 — runtime (Next.js standalone)
-FROM node:20-alpine AS runner
+# Stage 2 — runtime (Next.js standalone on Bun)
+FROM oven/bun:1-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+# Non-root runtime user (BusyBox/Alpine syntax)
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -u 1001 -S -G nodejs nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-RUN mkdir -p ./public
+RUN mkdir -p ./public && chown nextjs:nodejs ./public
 
 USER nextjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["bun", "server.js"]

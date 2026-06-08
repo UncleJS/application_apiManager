@@ -51,7 +51,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       type={type}
       ref={ref}
       className={cn(
-        "flex h-9 w-full rounded-md border border-border bg-input px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50",
+        "flex h-9 w-full rounded-md border border-border bg-input px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50",
         className
       )}
       {...props}
@@ -67,7 +67,7 @@ export const Label = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <label
     ref={ref}
-    className={cn("text-sm font-medium text-muted-foreground", className)}
+    className={cn("text-sm font-medium text-foreground/70", className)}
     {...props}
   />
 ));
@@ -168,7 +168,7 @@ export function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTa
   return (
     <th
       className={cn(
-        "h-10 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-10 px-4 text-left align-middle font-medium text-foreground/70 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -266,7 +266,7 @@ export function Dialog({
           <h2 className="text-lg font-semibold">{title}</h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="text-foreground/70 hover:text-foreground transition-colors"
             aria-label="Close"
           >
             ✕
@@ -298,7 +298,7 @@ export function Tabs({
             "rounded px-4 py-1.5 text-sm font-medium transition-colors",
             tab.id === activeTab
               ? "bg-card text-foreground shadow"
-              : "text-muted-foreground hover:text-foreground"
+              : "text-foreground/70 hover:text-foreground"
           )}
         >
           {tab.label}

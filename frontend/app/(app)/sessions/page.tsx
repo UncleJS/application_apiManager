@@ -147,10 +147,10 @@ export default function SessionsPage() {
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-foreground/70">Loading…</TableCell></TableRow>
               )}
               {!loading && filtered.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No sessions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-foreground/70">No sessions found.</TableCell></TableRow>
               )}
               {filtered.map((s) => {
                 const status = getSessionStatus(s);
@@ -158,7 +158,7 @@ export default function SessionsPage() {
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.username}</TableCell>
                     <TableCell>{s.organization_name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{s.client_ip ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs text-foreground/70">{s.client_ip ?? "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{formatSast(s.created_at_utc)}</TableCell>
                     <TableCell className="font-mono text-xs">{formatSast(s.last_activity_utc)}</TableCell>
                     <TableCell className="font-mono text-xs">{formatSast(s.expires_at_utc)}</TableCell>

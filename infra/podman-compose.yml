@@ -1,3 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# REFERENCE ONLY — this file is NOT the runtime.
+#
+# The authoritative deployment is the rootless-Podman + systemd Quadlet stack in
+# ../.quadlet/ (installed via scripts/install.sh). This compose file is kept only
+# as a convenience/reference for local experimentation.
+#
+# Known divergences from the Quadlet runtime (do not copy into production):
+#   - It uses bind mounts (./db/init.sql, ./caddy/Caddyfile). The Quadlet path
+#     seeds these into NAMED VOLUMES instead (no bind mounts in production).
+#   - It relies on the Podman-Compose `pod:` extension key (not Docker-compatible).
+#
+# Podman Compose only. Do not run with Docker Compose.
+# ─────────────────────────────────────────────────────────────────────────────
 version: "3.8"
 
 services:

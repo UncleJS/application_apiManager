@@ -6,7 +6,7 @@ After=api-manager-pod-pod.service
 Image=localhost/api-manager-dev:latest
 ContainerName=api-manager-dev
 Pod=api-manager-pod.pod
-EnvironmentFile=%h/.config/containers/systemd/api-manager.env
+EnvironmentFile=__REPO_ENV__
 
 [Install]
 WantedBy=default.target

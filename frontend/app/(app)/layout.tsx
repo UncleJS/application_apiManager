@@ -18,7 +18,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <span className="text-muted-foreground text-sm animate-pulse">Loading…</span>
+        <span className="text-foreground/70 text-sm animate-pulse">Loading…</span>
       </div>
     );
   }

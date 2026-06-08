@@ -33,20 +33,33 @@ export function getNowSast(): DateTime {
   return DateTime.now().setZone(SAST_TZ);
 }
 
+export type AccessWindowRow = {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_active: number;
+};
+
 function parseTimeToMinutes(time: string): number {
   const [hour, minute] = time.split(":").map((value) => Number.parseInt(value, 10));
   return hour * 60 + minute;
 }
 
 async function fetchWindows(subjectType: "user" | "api", subjectId: number) {
-  return query(
+  return query<AccessWindowRow[]>(
     "SELECT day_of_week, start_time, end_time, is_active FROM access_windows WHERE subject_type = ? AND subject_id = ?",
     [subjectType, subjectId]
   );
 }
 
-export async function isWithinWindows(subjectType: "user" | "api", subjectId: number, now: DateTime) {
-  const rows = await fetchWindows(subjectType, subjectId);
+/**
+ * Pure window evaluation: is `now` inside any active window in `rows`?
+ * Handles midnight-spanning windows (start_time > end_time), where the active
+ * range rolls over into the next calendar day, so the matching day for the tail
+ * end is the PREVIOUS day-of-week. Extracted from the DB fetch so the tricky
+ * rollover logic is unit-testable without a database.
+ */
+export function evaluateWindows(rows: AccessWindowRow[], now: DateTime): boolean {
   if (!rows || rows.length === 0) {
     return false;
   }
@@ -78,6 +91,11 @@ export async function isWithinWindows(subjectType: "user" | "api", subjectId: nu
   }
 
   return false;
+}
+
+export async function isWithinWindows(subjectType: "user" | "api", subjectId: number, now: DateTime) {
+  const rows = await fetchWindows(subjectType, subjectId);
+  return evaluateWindows(rows ?? [], now);
 }
 
 export async function getMatchingApi(pathname: string): Promise<ApiDefinition | null> {

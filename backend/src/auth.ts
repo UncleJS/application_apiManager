@@ -1,7 +1,11 @@
 import bcrypt from "bcryptjs";
 
+// Cost factor 12 is the modern baseline (2024+). bcrypt.compare reads the cost
+// from each stored hash, so existing cost-10 hashes keep verifying after this bump.
+const BCRYPT_COST = 12;
+
 export async function hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(BCRYPT_COST);
   return bcrypt.hash(password, salt);
 }
 
