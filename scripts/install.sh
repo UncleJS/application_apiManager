@@ -25,21 +25,24 @@ step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 # Linger keeps user services running after logout / across reboots. It changes
 # host user state, so it is opt-in rather than silently enabled.
 LINGER_MODE="ask"   # ask | yes | no
+ENABLE_PHPMYADMIN="false"
 for arg in "$@"; do
   case "$arg" in
     --enable-linger) LINGER_MODE="yes" ;;
     --no-linger)     LINGER_MODE="no" ;;
+    --enable-phpmyadmin) ENABLE_PHPMYADMIN="true" ;;
     -h|--help)
-      printf 'Usage: %s [--enable-linger|--no-linger]\n' "$(basename "$0")"
-      printf '  --enable-linger  Enable systemd linger (boot persistence) without prompting\n'
-      printf '  --no-linger      Skip enabling linger\n'
+      printf 'Usage: %s [--enable-linger|--no-linger] [--enable-phpmyadmin]\n' "$(basename "$0")"
+      printf '  --enable-linger       Enable systemd linger (boot persistence) without prompting\n'
+      printf '  --no-linger           Skip enabling linger\n'
+      printf '  --enable-phpmyadmin   Publish phpMyAdmin on https://localhost:55002\n'
       exit 0 ;;
     *) red "Unknown argument: $arg"; exit 1 ;;
   esac
 done
 
 normalize_env_file() {
-  "$PYTHON_BIN" - "$1" <<'PY'
+  "$PYTHON_BIN" - "$1" "$2" <<'PY'
 from pathlib import Path
 import secrets, string, sys
 
@@ -78,15 +81,33 @@ ensure_alias('NEXT_PUBLIC_API_URL', 'VITE_API_BASE_URL')
 
 bootstrap_enabled = (get('BOOTSTRAP_ADMIN') or 'true').lower() != 'false'
 default_passwords = {'', 'change_me', '010203!@', 'change_this_to_a_unique_strong_password'}
-if bootstrap_enabled and (get('BOOTSTRAP_ADMIN_PASSWORD') or '') in default_passwords:
-    alphabet = string.ascii_letters + string.digits + '-_!@#%^&*'
-    generated = ''.join(secrets.choice(alphabet) for _ in range(32))
-    setv('BOOTSTRAP_ADMIN_PASSWORD', generated)
+def generate(length):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-if (get('SEED_DATA') or 'false').lower() == 'true' and (get('SEED_USER_PASSWORD') or '') in {'', 'change_this_for_seeded_users'}:
-    alphabet = string.ascii_letters + string.digits + '-_!@#%^&*'
-    generated = ''.join(secrets.choice(alphabet) for _ in range(24))
-    setv('SEED_USER_PASSWORD', generated)
+if bootstrap_enabled and (get('BOOTSTRAP_ADMIN_PASSWORD') or '') in default_passwords:
+    setv('BOOTSTRAP_ADMIN_PASSWORD', generate(32))
+
+db_placeholders = {'', 'change_me', 'api_manager_password', 'root_password', '010203!@'}
+
+root_regenerated = False
+password_regenerated = False
+if (get('MARIADB_ROOT_PASSWORD') or '') in db_placeholders:
+    setv('MARIADB_ROOT_PASSWORD', generate(32))
+    root_regenerated = True
+if (get('MARIADB_PASSWORD') or '') in db_placeholders:
+    setv('MARIADB_PASSWORD', generate(32))
+    password_regenerated = True
+if password_regenerated or (get('DB_PASSWORD') or '') in db_placeholders:
+    setv('DB_PASSWORD', get('MARIADB_PASSWORD'))
+if root_regenerated or (get('DB_ROOT_PASSWORD') or '') in db_placeholders:
+    setv('DB_ROOT_PASSWORD', get('MARIADB_ROOT_PASSWORD'))
+
+if (get('SEED_DATA') or 'false').lower() == 'true' and (get('SEED_USER_PASSWORD') or '') in {'', 'change_this_for_seeded_users', 'change_me', '010203!@'}:
+    setv('SEED_USER_PASSWORD', generate(24))
+
+if len(sys.argv) > 2 and sys.argv[2] == 'true':
+    setv('ENABLE_PHPMYADMIN', 'true')
 
 out = []
 for key, value in entries:
@@ -134,9 +155,32 @@ mkdir -p "$SYSTEMD_DIR"
 
 # Normalise the repo-local .env in place and lock it down; Quadlet units read it
 # directly (no host-level copy).
-normalize_env_file "$ENV_FILE"
+normalize_env_file "$ENV_FILE" "$ENABLE_PHPMYADMIN"
 chmod 600 "$ENV_FILE"
 green "  Using repo-local env → $ENV_FILE"
+
+if [ "$ENABLE_PHPMYADMIN" != "true" ]; then
+  env_pma="$(grep '^ENABLE_PHPMYADMIN=' "$ENV_FILE" | cut -d= -f2- || true)"
+  if [ "$env_pma" = "true" ]; then
+    ENABLE_PHPMYADMIN="true"
+  fi
+fi
+
+python_reject_placeholder() {
+  local key="$1"
+  local value
+  value="$(grep "^${key}=" "$ENV_FILE" | cut -d= -f2- || true)"
+  case "$value" in
+    ""|change_me|api_manager_password|root_password|010203!@)
+      red "ERROR: ${key} is still a placeholder. Set a unique password in .env."
+      exit 1
+      ;;
+  esac
+}
+python_reject_placeholder MARIADB_ROOT_PASSWORD
+python_reject_placeholder MARIADB_PASSWORD
+python_reject_placeholder DB_PASSWORD
+python_reject_placeholder DB_ROOT_PASSWORD
 
 # ── copy + patch Quadlet units ────────────────────────────────────────────────
 step "Installing runtime Quadlet units → $SYSTEMD_DIR"
@@ -150,7 +194,6 @@ for unit in \
   "$QUADLET_DIR"/api-manager-mariadb.container \
   "$QUADLET_DIR"/api-manager-backend.container \
   "$QUADLET_DIR"/api-manager-frontend.container \
-  "$QUADLET_DIR"/api-manager-phpmyadmin.container \
   "$QUADLET_DIR"/api-manager-edge.container; do
   dest="$SYSTEMD_DIR/$(basename "$unit")"
   cp "$unit" "$dest"
@@ -158,6 +201,18 @@ for unit in \
   sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$dest"
   green "  $(basename "$unit")"
 done
+
+if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
+  cp "$QUADLET_DIR/api-manager-phpmyadmin.container" "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
+  sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
+  if ! grep -q 'PublishPort=55002:55002' "$SYSTEMD_DIR/api-manager-pod.pod"; then
+    printf '\nPublishPort=55002:55002\n' >> "$SYSTEMD_DIR/api-manager-pod.pod"
+  fi
+  green "  api-manager-phpmyadmin.container (opt-in)"
+else
+  rm -f "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
+  green "  phpMyAdmin skipped (pass --enable-phpmyadmin or set ENABLE_PHPMYADMIN=true)"
+fi
 
 green "  Dev Quadlet is managed separately via scripts/dev.sh"
 
@@ -189,10 +244,18 @@ done
 
 # ── seed Caddyfile into named volume ──────────────────────────────────────────
 step "Writing Caddyfile into api-manager-caddy-config volume"
+caddy_input="$CADDYFILE"
+if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
+  caddy_input="$(mktemp)"
+  cat "$CADDYFILE" "$ROOT_DIR/infra/caddy/Caddyfile.phpmyadmin" > "$caddy_input"
+fi
 podman run --rm -i \
   -v systemd-api-manager-caddy-config:/etc/caddy:Z \
   docker.io/library/busybox:latest \
-  sh -lc 'cat > /etc/caddy/Caddyfile && echo "Caddyfile written"' < "$CADDYFILE"
+  sh -lc 'cat > /etc/caddy/Caddyfile && echo "Caddyfile written"' < "$caddy_input"
+if [ "$caddy_input" != "$CADDYFILE" ]; then
+  rm -f "$caddy_input"
+fi
 
 # ── start services ────────────────────────────────────────────────────────────
 step "Starting runtime systemd user container services"
@@ -207,7 +270,10 @@ systemctl --user start api-manager-mariadb.service
 step "Waiting for MariaDB to be ready"
 # Load DB root password from env file
 DB_ROOT_PASSWORD="$(grep '^MARIADB_ROOT_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
-DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-root_password}"
+if [ -z "$DB_ROOT_PASSWORD" ]; then
+  red "ERROR: MARIADB_ROOT_PASSWORD is empty."
+  exit 1
+fi
 RETRIES="${DB_WAIT_RETRIES:-60}"
 DELAY_S=2
 db_ready=false
@@ -253,16 +319,19 @@ if [ "$SEED_DATA" = "true" ] || [ "$SEED_ACCESS_LOGS" = "true" ]; then
     --env-file "$ENV_DEST" \
     -e SEED_DATA="$SEED_DATA" \
     -e SEED_ACCESS_LOGS="$SEED_ACCESS_LOGS" \
+    -e ALLOW_SEED=true \
     localhost/api-manager-backend:latest \
     bun run seed
 fi
 
-step "Starting backend, frontend, phpMyAdmin, and edge services"
+step "Starting backend, frontend, and edge services"
 systemctl --user start \
   api-manager-backend.service \
   api-manager-frontend.service \
-  api-manager-phpmyadmin.service \
   api-manager-edge.service
+if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
+  systemctl --user start api-manager-phpmyadmin.service
+fi
 
 # ── done ──────────────────────────────────────────────────────────────────────
 green ""
@@ -271,8 +340,12 @@ green "║  API Manager installed successfully          ║"
 green "╠══════════════════════════════════════════════╣"
 green "║  Frontend:   https://localhost:55000         ║"
 green "║  Backend:    https://localhost:55001         ║"
-green "║  phpMyAdmin: https://localhost:55002         ║"
-green "║  API Docs:   https://localhost:55001/docs    ║"
+if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
+  green "║  phpMyAdmin: https://localhost:55002         ║"
+else
+  green "║  phpMyAdmin: disabled                      ║"
+fi
+green "║  API docs:   set DOCS_ENABLED=true           ║"
 green "╚══════════════════════════════════════════════╝"
 green ""
 yellow "Note: TLS certs are self-signed. Accept the browser warning"

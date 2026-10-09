@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context";
 import { formatSast, normalizeRole, parseUtcDate } from "@/lib/utils";
 import { ShieldOff } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
+import RoleGate from "@/components/RoleGate";
 import { getErrorMessage } from "@/lib/page-utils";
 
 function getSessionStatus(s: Session): "active" | "revoked" | "expired" {
@@ -73,17 +74,18 @@ export default function SessionsPage() {
 
   const filtered = useMemo(() => {
     return sessions.filter((s) => {
-      if (filterUserId && s.user_id !== filterUserId) return false;
-      if (filterOrgId && s.organization_id !== filterOrgId) return false;
+      if (filterUserId && Number(s.user_id) !== Number(filterUserId)) return false;
+      if (filterOrgId && Number(s.organization_id) !== Number(filterOrgId)) return false;
       const status = getSessionStatus(s);
       if (filterStatus !== "all" && status !== filterStatus) return false;
       return true;
     });
   }, [sessions, filterUserId, filterOrgId, filterStatus]);
 
-  const visibleOrgs = role === "global_admin" ? orgs : orgs.filter((o) => o.id === orgId);
+  const visibleOrgs = role === "global_admin" ? orgs : orgs.filter((o) => Number(o.id) === Number(orgId));
 
   return (
+    <RoleGate roles={["global_admin", "org_admin"]}>
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Sessions</h1>
 
@@ -189,5 +191,6 @@ export default function SessionsPage() {
         </CardContent>
       </Card>
     </div>
+    </RoleGate>
   );
 }

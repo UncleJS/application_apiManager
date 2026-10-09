@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS api_definitions (
   created_at_utc DATETIME NOT NULL,
   updated_at_utc DATETIME NOT NULL,
   CONSTRAINT fk_api_org FOREIGN KEY (organization_id) REFERENCES organizations(id),
-  UNIQUE KEY uq_api_org_path (organization_id, base_path)
+  INDEX idx_api_org (organization_id),
+  UNIQUE KEY uq_api_base_path (base_path)
 );
 
 CREATE TABLE IF NOT EXISTS user_api_permissions (
@@ -169,23 +170,28 @@ INSERT IGNORE INTO deny_reasons (code, message) VALUES
   ('USER_NOT_ASSIGNED_TO_API', 'User not assigned to API'),
   ('USER_OUTSIDE_ALLOWED_HOURS', 'User outside allowed hours'),
   ('USER_ORG_MISMATCH', 'User organization mismatch'),
-  ('UPSTREAM_ERROR', 'Upstream request failed');
+  ('UPSTREAM_ERROR', 'Upstream request failed'),
+  ('ORG_ARCHIVED', 'Organization archived');
 
 INSERT IGNORE INTO audit_actions (code) VALUES
   ('ORG_CREATE'),
   ('ORG_UPDATE'),
   ('ORG_ARCHIVE'),
+  ('ORG_UNARCHIVE'),
   ('USER_CREATE'),
   ('USER_UPDATE'),
   ('USER_ARCHIVE'),
+  ('USER_UNARCHIVE'),
   ('API_CREATE'),
   ('API_UPDATE'),
   ('API_ARCHIVE'),
+  ('API_UNARCHIVE'),
   ('PERMISSION_ASSIGN'),
   ('PERMISSION_UNASSIGN'),
   ('WINDOW_CREATE'),
   ('WINDOW_UPDATE'),
-  ('WINDOW_ARCHIVE');
+  ('WINDOW_ARCHIVE'),
+  ('WINDOW_UNARCHIVE');
 
 INSERT IGNORE INTO audit_entities (name) VALUES
   ('org'),

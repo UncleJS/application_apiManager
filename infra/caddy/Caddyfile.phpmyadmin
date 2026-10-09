@@ -1,0 +1,5 @@
+https://localhost:55002 {
+  import security_headers
+  reverse_proxy 127.0.0.1:80
+  tls internal
+}

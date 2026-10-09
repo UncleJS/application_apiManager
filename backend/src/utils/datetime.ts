@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 
 const SQL_FORMAT = "yyyy-LL-dd HH:mm:ss";
+const BOOLEAN_KEYS = new Set(["is_public", "is_enabled", "always_on", "is_active"]);
 
 export function nowUtc(): string {
   return DateTime.utc().toFormat(SQL_FORMAT);
@@ -31,6 +32,10 @@ export function serializeUtcFields<T>(value: T): T {
   const entries = Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => {
     if (key.endsWith("_utc") && (typeof entryValue === "string" || entryValue instanceof Date)) {
       return [key, toUtcIso(entryValue)];
+    }
+
+    if (BOOLEAN_KEYS.has(key) && (entryValue === 0 || entryValue === 1 || entryValue === "0" || entryValue === "1")) {
+      return [key, Number(entryValue) === 1];
     }
 
     if (entryValue instanceof Date) {

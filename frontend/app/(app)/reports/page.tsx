@@ -14,6 +14,8 @@ import DateOnlyInput from "@/components/DateOnlyInput";
 import { RefreshCw } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
 import { getErrorMessage } from "@/lib/page-utils";
+import { formatSast } from "@/lib/utils";
+import RoleGate from "@/components/RoleGate";
 
 const TABS = [
   { id: "orgs-weekly", label: "Orgs Weekly" },
@@ -51,7 +53,7 @@ function ReportTable({ report, nameKey }: { report: ReportResult; nameKey: "orga
     <div className="space-y-2">
       {report.range.start && (
         <p className="text-xs text-foreground/70">
-          {report.range.start} → {report.range.end}
+          {formatSast(report.range.start)} → {formatSast(report.range.end)}
         </p>
       )}
       <Table>
@@ -131,6 +133,7 @@ export default function ReportsPage() {
   };
 
   return (
+    <RoleGate roles={["global_admin", "org_admin", "user"]}>
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Reports</h1>
 
@@ -168,5 +171,6 @@ export default function ReportsPage() {
         </Card>
       </div>
     </div>
+    </RoleGate>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
-  archiveUser, createUser, getOrgs, getLookups, getUsers, updateUser,
+  archiveUser, createUser, getOrgs, getLookups, getUsers, unarchiveUser, updateUser,
   type Org, type User,
 } from "@/lib/api";
 import {
@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { normalizeRole } from "@/lib/utils";
 import { Plus, Pencil, Archive, ChevronDown, ChevronUp } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
+import RoleGate from "@/components/RoleGate";
 import { getErrorMessage } from "@/lib/page-utils";
 
 export default function UsersPage() {
@@ -52,7 +53,7 @@ export default function UsersPage() {
     setError("");
     try {
       const [ud, od, ld] = await Promise.all([getUsers(), getOrgs(), getLookups()]);
-      const visibleUsers = role === "global_admin" ? ud.items : ud.items.filter((u) => u.organization_id === orgId);
+      const visibleUsers = role === "global_admin" ? ud.items : ud.items.filter((u) => Number(u.organization_id) === Number(orgId));
       setUsers(visibleUsers);
       setOrgs(od.items);
       setRoles(ld.roles);
@@ -70,6 +71,14 @@ export default function UsersPage() {
   const visibleOrgs = role === "global_admin" ? orgs : orgs.filter((o) => o.id === orgId);
 
   const handleCreate = async () => {
+    if (createForm.username.trim().length < 2) {
+      setError("Username must be at least 2 characters");
+      return;
+    }
+    if (createForm.password.length < 12) {
+      setError("Password must be at least 12 characters");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -95,22 +104,32 @@ export default function UsersPage() {
       username: u.username,
       password: "",
       organizationId: u.organization_id,
-      roleId: roles.find((r) => r.name === u.role_name)?.id ?? 0,
+      roleId: u.role_id ?? roles.find((r) => r.name === u.role_name)?.id ?? 0,
       statusId: u.status_id ?? 0,
     });
   };
 
   const handleEditSave = async () => {
     if (!editTarget) return;
+    if (editForm.username.trim().length < 2) {
+      setError("Username must be at least 2 characters");
+      return;
+    }
+    if (editForm.password && editForm.password.length < 12) {
+      setError("Password must be at least 12 characters");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const payload: Record<string, unknown> = {
         username: editForm.username,
-        organizationId: editForm.organizationId,
         roleId: editForm.roleId,
         statusId: editForm.statusId,
       };
+      if (role === "global_admin") {
+        payload.organizationId = editForm.organizationId;
+      }
       if (editForm.password) payload.password = editForm.password;
       await updateUser(editTarget.id, payload as Parameters<typeof updateUser>[1]);
       setEditTarget(null);
@@ -119,6 +138,16 @@ export default function UsersPage() {
       setError(getErrorMessage(err, "Failed to update user"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleUnarchive = async (id: number) => {
+    setError("");
+    try {
+      await unarchiveUser(id);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to unarchive user"));
     }
   };
 
@@ -142,9 +171,8 @@ export default function UsersPage() {
     }
   };
 
-  const expandedUser = useMemo(() => users.find((u) => u.id === expandedId), [users, expandedId]);
-
   return (
+    <RoleGate roles={["global_admin", "org_admin"]}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Users</h1>
@@ -209,9 +237,15 @@ export default function UsersPage() {
                           Windows {expandedId === u.id && expandedTab === "windows" ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
                         </Button>
                         {(role === "global_admin" || role === "org_admin") && (
-                          <Button variant="destructive" size="sm" onClick={() => handleArchive(u.id)}>
-                            <Archive className="h-3.5 w-3.5 mr-1" />Archive
-                          </Button>
+                          u.status_name === "active" ? (
+                            <Button variant="destructive" size="sm" onClick={() => handleArchive(u.id)}>
+                              <Archive className="h-3.5 w-3.5 mr-1" />Archive
+                            </Button>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => handleUnarchive(u.id)}>
+                              Unarchive
+                            </Button>
+                          )
                         )}
                       </div>
                     </TableCell>
@@ -268,7 +302,7 @@ export default function UsersPage() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={saving || !createForm.username}>Create</Button>
+            <Button onClick={handleCreate} disabled={saving || createForm.username.trim().length < 2 || createForm.password.length < 12}>Create</Button>
           </div>
         </div>
       </Dialog>
@@ -322,5 +356,6 @@ export default function UsersPage() {
         </div>
       </Dialog>
     </div>
+    </RoleGate>
   );
 }

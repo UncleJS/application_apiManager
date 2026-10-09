@@ -7,7 +7,8 @@ Requires=api-manager-backend.service
 Image=localhost/api-manager-frontend:latest
 ContainerName=api-manager-frontend
 Pod=api-manager-pod.pod
-EnvironmentFile=__REPO_ENV__
+NoNewPrivileges=true
+Memory=512m
 HealthCmd=sh -lc 'IP=$(hostname -i | awk "{print \$1}"); wget -q -O - "http://$IP:3000" >/dev/null'
 HealthInterval=10s
 HealthTimeout=5s

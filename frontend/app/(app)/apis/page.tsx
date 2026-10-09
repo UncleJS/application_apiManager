@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
-  archiveApi, createApi, getApis, getOrgs, updateApi,
+  archiveApi, createApi, getApis, getOrgs, unarchiveApi, updateApi,
   type ApiRecord, type Org,
 } from "@/lib/api";
 import {
@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth-context";
 import { normalizeRole } from "@/lib/utils";
 import { Plus, Pencil, Archive, ChevronDown, ChevronUp } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
+import RoleGate from "@/components/RoleGate";
 import { getErrorMessage } from "@/lib/page-utils";
 
 export default function ApisPage() {
@@ -53,7 +54,7 @@ export default function ApisPage() {
         getApis(),
         role === "user" ? Promise.resolve({ items: [] as Org[] }) : getOrgs(),
       ]);
-      const visibleApis = role === "global_admin" ? ad.items : ad.items.filter((a) => a.organization_id === orgId);
+      const visibleApis = role === "global_admin" ? ad.items : ad.items.filter((a) => Number(a.organization_id) === Number(orgId));
       setApis(visibleApis);
       setOrgs(od.items);
     } catch (err) {
@@ -69,6 +70,24 @@ export default function ApisPage() {
   const visibleOrgs = role === "global_admin" ? orgs : orgs.filter((o) => o.id === orgId);
 
   const handleCreate = async () => {
+    if (createForm.name.trim().length < 2) {
+      setError("Name must be at least 2 characters");
+      return;
+    }
+    if (!createForm.basePath.startsWith("/") || createForm.basePath.trim().length < 2) {
+      setError("Base path must start with / and be at least 2 characters");
+      return;
+    }
+    try {
+      const target = new URL(createForm.targetUrl);
+      if (!["http:", "https:"].includes(target.protocol)) {
+        setError("Target URL must use http or https");
+        return;
+      }
+    } catch {
+      setError("Target URL must be a valid absolute URL");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -122,6 +141,16 @@ export default function ApisPage() {
     }
   };
 
+  const handleUnarchive = async (id: number) => {
+    setError("");
+    try {
+      await unarchiveApi(id);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to unarchive API"));
+    }
+  };
+
   const handleArchive = async (id: number) => {
     if (!confirm("Archive this API?")) return;
     setError("");
@@ -138,6 +167,7 @@ export default function ApisPage() {
   };
 
   return (
+    <RoleGate roles={["global_admin", "org_admin", "user"]}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">APIs</h1>
@@ -200,9 +230,15 @@ export default function ApisPage() {
                             >
                               Windows {expandedId === api.id ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleArchive(api.id)}>
-                              <Archive className="h-3.5 w-3.5 mr-1" />Archive
-                            </Button>
+                            {api.is_enabled ? (
+                              <Button variant="destructive" size="sm" onClick={() => handleArchive(api.id)}>
+                                <Archive className="h-3.5 w-3.5 mr-1" />Archive
+                              </Button>
+                            ) : (
+                              <Button variant="outline" size="sm" onClick={() => handleUnarchive(api.id)}>
+                                Unarchive
+                              </Button>
+                            )}
                           </>
                         )}
                       </div>
@@ -264,7 +300,7 @@ export default function ApisPage() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={saving || !createForm.name}>Create</Button>
+            <Button onClick={handleCreate} disabled={saving || createForm.name.trim().length < 2 || createForm.basePath.trim().length < 2 || !createForm.targetUrl.trim()}>Create</Button>
           </div>
         </div>
       </Dialog>
@@ -316,5 +352,6 @@ export default function ApisPage() {
         </div>
       </Dialog>
     </div>
+    </RoleGate>
   );
 }

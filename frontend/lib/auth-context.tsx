@@ -2,8 +2,8 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { getMe, type User } from "@/lib/api";
+import { normalizeUser } from "@/lib/normalizeUser";
 import { useRouter } from "next/navigation";
-import { normalizeRole } from "@/lib/utils";
 
 interface AuthContextValue {
   user: User | null;
@@ -16,13 +16,6 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   refresh: async () => {},
 });
-
-function normalizeUser(user: User): User {
-  return {
-    ...user,
-    role: normalizeRole(user.role ?? user.role_name),
-  };
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -47,7 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handler = () => {
       setUser(null);
-      router.push("/login");
+      const path = `${window.location.pathname}${window.location.search}`;
+      if (path.startsWith("/login")) {
+        router.push("/login");
+        return;
+      }
+      router.push(`/login?returnTo=${encodeURIComponent(path)}`);
     };
     window.addEventListener("auth:required", handler);
     return () => window.removeEventListener("auth:required", handler);

@@ -1,3 +1,5 @@
+import http from "node:http";
+import https from "node:https";
 import { buildError } from "./utils/errors";
 import { getMatchingApi, getNowSast, isWithinWindows, ApiDefinition, UserRecord } from "./access";
 import { logAccess } from "./logging";
@@ -5,9 +7,23 @@ import { config } from "./config";
 import { nowUtc } from "./utils/datetime";
 import { buildCookie, parseCookies } from "./utils/cookies";
 import { getSessionUser, isSessionExpired, revokeSession, SESSION_COOKIE, touchSession } from "./sessions";
+import { normalizeRole } from "./middleware/authenticate";
 import { db } from "./db/client";
 import { sql } from "drizzle-orm";
 import { assertSafeTargetUrl } from "./utils/network";
+
+const DROPPED_RESPONSE_HEADERS = new Set([
+  "set-cookie",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "upgrade",
+  "te",
+  "trailer",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "proxy-connection"
+]);
 
 const FORWARDED_REQUEST_HEADERS = new Set([
   "accept",
@@ -35,10 +51,144 @@ function isLoopbackAddress(remoteAddr?: string): boolean {
   return value === "127.0.0.1" || value === "::1";
 }
 
-function joinPaths(basePath: string, suffix: string): string {
-  const base = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
-  const extra = suffix.startsWith("/") ? suffix : `/${suffix}`;
-  return `${base}${extra === "/" ? "" : extra}`;
+function containsDotSegment(value: string): boolean {
+  const candidates = [value.replace(/\\/g, "/")];
+  try {
+    candidates.push(decodeURIComponent(candidates[0]));
+  } catch {
+    return true;
+  }
+  try {
+    candidates.push(decodeURIComponent(candidates[1]));
+  } catch {
+    // A single decode is enough when the second pass is not encoded.
+  }
+
+  return candidates.some((candidate) =>
+    candidate.split("/").some((segment) => segment === ".." || segment === ".")
+  );
+}
+
+export function resolveUpstreamUrl(
+  targetUrl: string,
+  suffix: string
+): { ok: true; href: string } | { ok: false; message: string } {
+  let target: URL;
+  try {
+    target = new URL(targetUrl);
+  } catch {
+    return { ok: false, message: "Target URL is invalid" };
+  }
+
+  if (containsDotSegment(suffix) || suffix.includes("\\")) {
+    return { ok: false, message: "Upstream path escapes the configured target" };
+  }
+
+  const basePath = target.pathname === "/" ? "/" : target.pathname.replace(/\/$/, "");
+  const extra = !suffix || suffix === "/" ? "" : suffix.startsWith("/") ? suffix : `/${suffix}`;
+  const joined = basePath === "/" ? extra || "/" : `${basePath}${extra}`;
+
+  const resolved = new URL(targetUrl);
+  resolved.pathname = joined;
+  const resultPath = resolved.pathname;
+  const underPrefix = basePath === "/" || resultPath === basePath || resultPath.startsWith(`${basePath}/`);
+  if (!underPrefix || resolved.host !== target.host) {
+    return { ok: false, message: "Upstream path escapes the configured target" };
+  }
+
+  return { ok: true, href: resolved.toString() };
+}
+
+export function filterUpstreamResponseHeaders(headers: Headers): Record<string, string> {
+  const upstreamHeaders: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (DROPPED_RESPONSE_HEADERS.has(key.toLowerCase())) {
+      return;
+    }
+    upstreamHeaders[key] = value;
+  });
+  return upstreamHeaders;
+}
+
+export function isUpstreamRedirect(status: number): boolean {
+  return status >= 300 && status < 400;
+}
+
+export function isUpstreamTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+function requestUpstream(
+  target: URL,
+  address: string,
+  family: 4 | 6,
+  init: { method: string; headers: Record<string, string>; body?: Buffer; timeoutMs: number; maxBytes: number }
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+    const lib = target.protocol === "https:" ? https : http;
+    const req = lib.request(
+      {
+        host: address,
+        servername: target.hostname,
+        port: target.port || undefined,
+        path: `${target.pathname}${target.search}`,
+        method: init.method,
+        headers: { ...init.headers, host: target.host },
+        timeout: init.timeoutMs,
+        lookup: (_hostname, _options, callback) => {
+          callback(null, address, family);
+        }
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        res.on("data", (chunk) => {
+          const buf = Buffer.from(chunk);
+          total += buf.length;
+          if (total > init.maxBytes) {
+            res.destroy();
+            req.destroy();
+            fail(new Error("RESPONSE_TOO_LARGE"));
+            return;
+          }
+          chunks.push(buf);
+        });
+        res.on("end", () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          const headers = new Headers();
+          for (const [key, value] of Object.entries(res.headers)) {
+            if (value === undefined) {
+              continue;
+            }
+            headers.set(key, Array.isArray(value) ? value.join(", ") : String(value));
+          }
+          resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 502, headers }));
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      const error = new Error("Upstream request timed out");
+      error.name = "TimeoutError";
+      fail(error);
+    });
+    req.on("error", (error) => fail(error));
+    if (init.body && !["GET", "HEAD"].includes(init.method)) {
+      req.write(init.body);
+    }
+    req.end();
+  });
 }
 
 function getClientIp(headers: Record<string, string | string[] | undefined>, remoteAddr?: string): string {
@@ -126,6 +276,14 @@ function computeHeaderBytes(headers: Record<string, string>): number {
   return total;
 }
 
+async function organizationIsActive(organizationId: number): Promise<boolean> {
+  const rows = await db.execute(
+    sql`SELECT s.name AS status_name FROM organizations o JOIN organization_statuses s ON o.status_id = s.id WHERE o.id = ${organizationId}`
+  );
+  const data = rows[0] as unknown as { status_name: string }[];
+  return data[0]?.status_name === "active";
+}
+
 async function isAssigned(userId: number, apiId: number): Promise<boolean> {
   const rows = await db.execute(
     sql`SELECT id FROM user_api_permissions WHERE user_id = ${userId} AND api_id = ${apiId}`
@@ -166,11 +324,15 @@ async function authorize(
     user = {
       id: session.user_id,
       organization_id: session.organization_id,
-      role: session.role,
+      role: normalizeRole(session.role),
       status: session.status
     };
     sessionId = session.session_id;
     await touchSession(sessionId);
+  }
+
+  if (!(await organizationIsActive(api.organization_id))) {
+    return { allowed: false, reason: { code: "ORG_ARCHIVED", status: 403, message: "Organization archived" }, user };
   }
 
   if (api.is_enabled === 0) {
@@ -273,7 +435,7 @@ export async function handleProxy(context: {
         set.headers["Set-Cookie"] = buildCookie(SESSION_COOKIE, "", {
           httpOnly: true,
           secure: true,
-          sameSite: "Lax",
+          sameSite: "Strict",
           path: "/",
           maxAgeSeconds: 0
         });
@@ -303,10 +465,9 @@ export async function handleProxy(context: {
 
   const basePath = api.base_path;
   const suffix = url.pathname.startsWith(basePath) ? url.pathname.slice(basePath.length) : url.pathname;
-  const targetBase = new URL(api.target_url);
-  const targetSafety = await assertSafeTargetUrl(api.target_url);
-  if (!targetSafety.ok) {
-    const errorPayload = buildError("UPSTREAM_FORBIDDEN", targetSafety.message);
+  const resolvedTarget = resolveUpstreamUrl(api.target_url, suffix || "/");
+  if (!resolvedTarget.ok) {
+    const errorPayload = buildError("UPSTREAM_FORBIDDEN", resolvedTarget.message);
     await logAccess({
       organizationId: api.organization_id,
       userId: decision.user?.id ?? null,
@@ -326,8 +487,8 @@ export async function handleProxy(context: {
     return errorPayload;
   }
 
-  targetBase.pathname = joinPaths(targetBase.pathname, suffix || "/");
-  targetBase.search = url.search;
+  const upstreamUrl = new URL(resolvedTarget.href);
+  upstreamUrl.search = url.search;
 
   const proxyHeaders = filterProxyHeaders(headers);
   proxyHeaders["x-forwarded-for"] = getClientIp(headers, remoteAddress);
@@ -364,21 +525,24 @@ export async function handleProxy(context: {
   }
 
   try {
-    const upstreamResponse = await fetch(targetBase.toString(), {
+    const targetSafety = await assertSafeTargetUrl(api.target_url);
+    if (!targetSafety.ok) {
+      throw new Error("UPSTREAM_FORBIDDEN");
+    }
+
+    const upstreamResponse = await requestUpstream(upstreamUrl, targetSafety.address, targetSafety.family, {
       method: request.method,
       headers: proxyHeaders,
       body,
-      duplex: "half"
-    } as RequestInit);
-
-    const upstreamHeaders: Record<string, string> = {};
-    upstreamResponse.headers.forEach((value, key) => {
-      const lowerKey = key.toLowerCase();
-      if (["set-cookie", "transfer-encoding", "connection", "keep-alive"].includes(lowerKey)) {
-        return;
-      }
-      upstreamHeaders[key] = value;
+      timeoutMs: config.proxyTimeoutMs,
+      maxBytes: config.proxyMaxResponseBytes
     });
+
+    if (isUpstreamRedirect(upstreamResponse.status)) {
+      throw new Error("UPSTREAM_REDIRECT");
+    }
+
+    const upstreamHeaders = filterUpstreamResponseHeaders(upstreamResponse.headers);
 
     const responseHeaderBytes = computeHeaderBytes(upstreamHeaders);
     const { body: upstreamBody, responseBytes } = await readResponseWithLimit(
@@ -408,15 +572,22 @@ export async function handleProxy(context: {
     }
     return upstreamBody;
   } catch (error) {
+    const tooLarge = error instanceof Error && error.message === "RESPONSE_TOO_LARGE";
+    const forbidden = error instanceof Error && error.message === "UPSTREAM_FORBIDDEN";
+    const timedOut = isUpstreamTimeout(error);
     const errorPayload = buildError(
-      error instanceof Error && error.message === "RESPONSE_TOO_LARGE"
-        ? "RESPONSE_TOO_LARGE"
-        : "UPSTREAM_ERROR",
-      error instanceof Error && error.message === "RESPONSE_TOO_LARGE"
+      tooLarge ? "RESPONSE_TOO_LARGE" : forbidden ? "UPSTREAM_FORBIDDEN" : "UPSTREAM_ERROR",
+      tooLarge
         ? "Upstream response body exceeds the configured limit"
-        : "Upstream request failed"
+        : forbidden
+          ? "Target URL points to a forbidden private or local address"
+          : timedOut
+            ? "Upstream request timed out"
+            : error instanceof Error && error.message === "UPSTREAM_REDIRECT"
+              ? "Upstream redirect was not followed"
+              : "Upstream request failed"
     );
-    const status = error instanceof Error && error.message === "RESPONSE_TOO_LARGE" ? 502 : 502;
+    const status = 502;
     await logAccess({
       organizationId: api.organization_id,
       userId: decision.user?.id ?? null,

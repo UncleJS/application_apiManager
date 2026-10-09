@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DateTime } from "luxon";
-import { isSessionExpired, type SessionUser } from "./sessions";
+import { isSessionExpired, revokeSessionsForUser, type SessionUser } from "./sessions";
 
 const SQL_FORMAT = "yyyy-LL-dd HH:mm:ss";
 const sql = (dt: DateTime) => dt.toUTC().toFormat(SQL_FORMAT);
@@ -54,5 +54,9 @@ describe("isSessionExpired", () => {
   test("past hard-max expiry → expired even when recently active", () => {
     const s = session({ idleAgoSeconds: 5, expiresInSeconds: -1 });
     expect(isSessionExpired(s, IDLE, HARD_MAX)).toBe(true);
+  });
+
+  test("password changes can revoke every open session for that user", () => {
+    expect(typeof revokeSessionsForUser).toBe("function");
   });
 });

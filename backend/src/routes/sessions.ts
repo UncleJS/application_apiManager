@@ -6,12 +6,14 @@ import { revokeSession } from "../sessions";
 import { requireRole } from "../middleware/requireRole";
 import { query as dbQuery, type QueryValue } from "../db/index";
 import { serializeUtcFields } from "../utils/datetime";
+import { resolveListLimit } from "../utils/listLimit";
 import type { ProtectedContext } from "../types/http";
 import { SessionList, OkResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type SessionsQuery = {
   userId?: string;
   orgId?: string;
+  limit?: string;
 };
 
 type SessionParams = {
@@ -60,6 +62,7 @@ export const sessionsPlugin = new Elysia({ prefix: "/sessions" })
       params.push(userId);
     }
 
+    const limit = resolveListLimit(query?.limit);
     const where = conditions.join(" AND ");
     const rows = await dbQuery<SessionRow[]>(
       `SELECT s.id, s.user_id, u.username, u.organization_id, o.name as organization_name, r.name as role, s.created_at_utc, s.last_activity_utc, s.expires_at_utc, s.revoked_at_utc, s.user_agent, s.client_ip
@@ -68,8 +71,9 @@ export const sessionsPlugin = new Elysia({ prefix: "/sessions" })
        JOIN organizations o ON u.organization_id = o.id
        JOIN roles r ON u.role_id = r.id
        WHERE ${where}
-       ORDER BY s.last_activity_utc DESC`,
-      params
+       ORDER BY s.last_activity_utc DESC
+       LIMIT ?`,
+      [...params, limit]
     );
 
     const items = rows.map((row: SessionRow) => ({

@@ -3,6 +3,7 @@ import { hashPassword } from "./auth";
 import { query, type QueryValue } from "./db/index";
 import { SAST_TZ } from "./access";
 import { nowUtc } from "./utils/datetime";
+import { assertSeedPassword } from "./utils/seedGuard";
 
 const GLOBAL_ORG_NAME = "Global";
 
@@ -68,6 +69,8 @@ export async function ensureBootstrapAdmin(globalOrgId: number): Promise<void> {
   }[]>("SELECT id, role_id, status_id, organization_id FROM users WHERE username = ?", ["global-admin"]);
 
   if (existingData && existingData.length > 0) {
+    // An existing global-admin password is not rotated from BOOTSTRAP_ADMIN_PASSWORD.
+    // Change it through the users API, which also revokes that user's sessions.
     const user = existingData[0];
     const updates: string[] = [];
     const params: QueryValue[] = [];
@@ -98,12 +101,19 @@ export async function runBootstrap(): Promise<void> {
   const globalOrgId = await ensureGlobalOrg();
   await ensureBootstrapAdmin(globalOrgId);
 
-  if (config.seedData) {
+  const seedRequested = config.seedData || config.seedAccessLogs;
+  const seedAllowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_SEED === "true";
+  if (seedRequested && !seedAllowed) {
+    console.warn("Ignoring SEED_DATA/SEED_ACCESS_LOGS because NODE_ENV=production. Use a one-shot seed with ALLOW_SEED=true.");
+  }
+
+  if (seedRequested && seedAllowed && config.seedData) {
+    assertSeedPassword();
     const { seedDevData } = await import("./scripts/seed");
     await seedDevData(globalOrgId);
   }
 
-  if (config.seedAccessLogs) {
+  if (seedRequested && seedAllowed && config.seedAccessLogs) {
     const { seedAccessLogs } = await import("./scripts/seed");
     await seedAccessLogs(SAST_TZ);
   }

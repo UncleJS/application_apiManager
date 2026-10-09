@@ -12,7 +12,9 @@ Environment=PORT=3001
 Environment=HOST=0.0.0.0
 Environment=DB_HOST=127.0.0.1
 Environment=DB_PORT=3306
-HealthCmd=sh -lc 'IP=$(hostname -i | awk "{print \$1}"); wget -q -O - "http://$IP:3001/healthz" >/dev/null'
+NoNewPrivileges=true
+Memory=512m
+HealthCmd=sh -lc 'IP=$(hostname -i | awk "{print \$1}"); wget -q -O - "http://$IP:3001/readyz" >/dev/null'
 HealthInterval=10s
 HealthTimeout=5s
 HealthRetries=6

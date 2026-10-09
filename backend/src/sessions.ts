@@ -72,6 +72,13 @@ export async function revokeSessionByToken(token: string): Promise<void> {
   await query("UPDATE sessions SET revoked_at_utc = ? WHERE session_token_hash = ?", [nowUtc(), tokenHash]);
 }
 
+export async function revokeSessionsForUser(userId: number): Promise<void> {
+  await query(
+    "UPDATE sessions SET revoked_at_utc = ? WHERE user_id = ? AND revoked_at_utc IS NULL",
+    [nowUtc(), userId]
+  );
+}
+
 export function isSessionExpired(session: SessionUser, idleSeconds: number, _hardMaxSeconds: number): boolean {
   if (session.revoked_at_utc) {
     return true;

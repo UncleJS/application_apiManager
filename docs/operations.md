@@ -27,14 +27,14 @@
 4. Open the UI:
    - Frontend: `https://localhost:55000`
    - Backend (API + proxy): `https://localhost:55001`
-   - phpMyAdmin: `https://localhost:55002`
+   - phpMyAdmin (only when enabled): `https://localhost:55002`
 
 Notes:
 - Host helper scripts require Python 3 (`python3` or `python`) for env normalization.
 - `scripts/install.sh` installs only the runtime Quadlets; build/start the separate dev container with `scripts/dev.sh`.
 - Public endpoints are served over HTTPS with a Caddy internal certificate; your browser will show a warning.
-- The frontend uses the same-origin `https://localhost:55000/api/*` proxy for browser API calls. Visit `https://localhost:55001` only when you need direct backend access (for example `/docs` or `/healthz`).
-- `https://localhost:55001/healthz` returns a simple health response.
+- The frontend uses the same-origin `https://localhost:55000/api/*` proxy for browser API calls. Visit `https://localhost:55001` only when you need direct backend access.
+- `https://localhost:55001/healthz` is liveness. `https://localhost:55001/readyz` is readiness (database up). Swagger at `/docs` is served only when `DOCS_ENABLED=true`.
 - MariaDB has no host port; it is only reachable inside the pod.
 
 [Go to TOC](#table-of-contents)
@@ -55,20 +55,22 @@ API client usage:
 ## Health checks
 Container healthchecks are configured in Quadlet container units for:
 - MariaDB (ping)
-- Backend (HTTPS `/healthz`)
+- Backend (HTTP `/readyz` inside the pod)
 - Frontend (HTTP root)
+- Edge (Caddy process check)
 
 [Go to TOC](#table-of-contents)
 
 ## Seed data (dev/test)
 `scripts/install.sh` reads seed flags from the root `.env` file.
 
-Enable dev/test seed data on startup:
+Enable dev/test seed data during install:
 - Set `SEED_DATA=true` in `.env`, then run `scripts/install.sh`.
+- Install runs seed once with `ALLOW_SEED=true`. The long-running production backend ignores `SEED_DATA` and `SEED_ACCESS_LOGS` unless that one-shot flag is set, so a leftover seed flag does not crash the API.
 - Seeded users: `global-admin`, `acme-admin`, `acme-user`, `globex-admin`, `globex-user`.
 - All seeded users share the same password from `SEED_USER_PASSWORD`.
 - If `SEED_USER_PASSWORD` is blank or still `change_this_for_seeded_users`, `scripts/install.sh` auto-generates a non-placeholder value in `.env`.
-- If you run the backend seed script manually instead of `scripts/install.sh`, the password falls back to `BOOTSTRAP_ADMIN_PASSWORD`, then to the internal default `010203!@`.
+- Manual seed refuses `NODE_ENV=production` unless `ALLOW_SEED=true`, and refuses known default passwords. `scripts/seed.sh` sets `ALLOW_SEED=true` for that one-shot run. Set `SEED_USER_PASSWORD` to a unique value. There is no built-in default password.
 
 Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Set `SEED_DATA=true` and `SEED_ACCESS_LOGS=true` in `.env`, then run `scripts/install.sh`.
@@ -81,11 +83,13 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Username: `global-admin`
 - Without `SEED_DATA`, the bootstrap admin password comes from `BOOTSTRAP_ADMIN_PASSWORD` and must not be left at a placeholder value.
 - With `SEED_DATA=true`, `global-admin` is also part of the seeded user set and uses the shared seeded-user password described above.
+- Changing `BOOTSTRAP_ADMIN_PASSWORD` does not rotate an existing `global-admin` password. Change it through the users API, which revokes that user's sessions.
 
 [Go to TOC](#table-of-contents)
 
 ## phpMyAdmin login
-- URL: `https://localhost:55002`
+- Off by default. Enable with `ENABLE_PHPMYADMIN=true` in `.env` or `scripts/install.sh --enable-phpmyadmin`. The CLI flag is written back into `.env` so a later install keeps phpMyAdmin.
+- URL when enabled: `https://localhost:55002`
 - Login is required (no auto-login).
 - Use the MariaDB credentials from `.env` (`MARIADB_USER` / `MARIADB_PASSWORD`).
 
@@ -93,7 +97,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## Rebuild / remove
 ### install.sh vs rebuild.sh
-- `scripts/install.sh` installs runtime Quadlet units, copies the env file, builds images, starts services, waits for DB, runs migrations, and optionally seeds.
+- `scripts/install.sh` installs runtime Quadlet units, normalizes the repo-local `.env` in place, builds images, starts services, waits for DB, runs migrations, and optionally seeds.
 - `scripts/dev.sh` installs/rebuilds only the dev Quadlet and restarts the dev container.
 - `scripts/rebuild.sh` rebuilds backend and/or frontend images and restarts those services.
 - Use `scripts/rebuild.sh` when you need code changes to take effect immediately.
@@ -105,8 +109,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Stop services: `scripts/stop.sh`
 - Remove containers (keep volumes): `scripts/uninstall.sh`
 - Remove containers + volumes: `scripts/uninstall.sh --purge`
-- Only removes volumes not in use and only used by `api-manager-pod`.
-- If compose labels are missing, it only removes volumes whose names start with `infra_api-manager-` or `api-manager-`.
+- After you type `YES`, purge deletes the named volumes `api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`, and `api-manager-dev`, including the `systemd-` prefixed copies when they exist.
 
 [Go to TOC](#table-of-contents)
 
@@ -138,14 +141,14 @@ Setup script:
 - `DB_HOST` (default `127.0.0.1`)
 
 Frontend:
-- `NEXT_PUBLIC_API_URL` (default `https://localhost:55001`)
+- `NEXT_PUBLIC_API_URL` (the deployed frontend image calls `/api` through Caddy; set this only for local frontend dev, for example `https://localhost:55001`)
 
 [Go to TOC](#table-of-contents)
 
 ## Ports
 - Frontend: `55000`
 - Backend HTTPS: `55001`
-- phpMyAdmin: `55002`
+- phpMyAdmin: `55002` (only when enabled)
 - MariaDB: internal only
 
 [Go to TOC](#table-of-contents)
@@ -208,7 +211,8 @@ MariaDB cannot enforce a single FK across multiple tables, so validation is hand
 [Go to TOC](#table-of-contents)
 
 ## TLS
-- TLS cert/key are generated on first backend start and stored in the `api-manager-tls` volume.
+- Public HTTPS is terminated by Caddy with `tls internal` (a local CA). The backend listens on plain HTTP inside the pod.
+- The `api-manager-tls` and `api-manager-jwt` volumes are unused by the current units. They remain so existing purge scripts keep a stable volume list. Caddy certificates live in `api-manager-caddy-data`.
 
 [Go to TOC](#table-of-contents)
 

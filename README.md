@@ -28,9 +28,9 @@ API gateway and admin console for managing proxied APIs with org-level access co
 This project includes:
 - A backend reverse proxy and admin API (`backend/`) built with **Bun + Elysia + Drizzle ORM** (TypeScript).
 - A **Next.js 14 App Router** admin UI (`frontend/`) with Tailwind high-contrast dark theme for orgs, users, APIs, permissions, windows, reports, and active sessions.
-- Rootless **Podman + systemd Quadlet** infrastructure (`.quadlet/`) with MariaDB, backend, frontend, phpMyAdmin, and Caddy for HTTPS edge serving.
+- Rootless **Podman + systemd Quadlet** infrastructure (`.quadlet/`) with MariaDB, backend, frontend, optional phpMyAdmin, and Caddy for HTTPS edge serving.
 - Caddy owns the public HTTPS ports; the backend runs on an internal-only HTTP port inside the pod.
-- OpenAPI spec at `/openapi.json`; Swagger UI at `/docs`.
+- OpenAPI spec at `/openapi.json` and Swagger UI at `/docs` when `DOCS_ENABLED=true`.
 
 [Go to TOC](#table-of-contents)
 
@@ -77,8 +77,8 @@ scripts/install.sh
    
 3. Open:
    - Frontend: `https://localhost:55000`
-   - Backend API / Swagger: `https://localhost:55001/docs`
-   - phpMyAdmin: `https://localhost:55002`
+   - Backend API: `https://localhost:55001` (Swagger at `/docs` when `DOCS_ENABLED=true`)
+   - phpMyAdmin: `https://localhost:55002` only after `scripts/install.sh --enable-phpmyadmin`
 
 Notes:
 - Certificates are self-signed; browser warnings are expected.
@@ -130,7 +130,7 @@ Important values:
 ## Ports
 - `55000` frontend (via Caddy HTTPS)
 - `55001` backend HTTPS (Elysia + Caddy)
-- `55002` phpMyAdmin (via Caddy HTTPS)
+- `55002` phpMyAdmin (via Caddy HTTPS, opt-in)
 - MariaDB is internal-only in the pod
 
 [Go to TOC](#table-of-contents)
@@ -152,12 +152,9 @@ When `SEED_DATA=true`, the seed script creates these users:
 - `globex-admin`
 - `globex-user`
 
-All seeded users share one password. The seed script resolves it in this order:
-- `SEED_USER_PASSWORD`
-- `BOOTSTRAP_ADMIN_PASSWORD`
-- internal fallback `010203!@` (manual seeding only)
+All seeded users share one password from `SEED_USER_PASSWORD`, or `BOOTSTRAP_ADMIN_PASSWORD` when the seed password is unset. Known defaults are refused. The production image ignores seed flags on the long-running process. `scripts/install.sh` and `scripts/seed.sh` pass `ALLOW_SEED=true` only for the one-shot seed.
 
-When you run `scripts/install.sh` with `SEED_DATA=true`, the script auto-generates `SEED_USER_PASSWORD` in `.env` if it is blank or still set to the placeholder value.
+When you run `scripts/install.sh` with `SEED_DATA=true`, the script auto-generates `SEED_USER_PASSWORD` in `.env` if it is blank or still set to a placeholder value.
 
 [Go to TOC](#table-of-contents)
 

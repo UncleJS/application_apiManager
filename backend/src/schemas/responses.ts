@@ -11,6 +11,7 @@ import { t, type TSchema } from "elysia";
  */
 
 const Num = t.Union([t.Number(), t.String()]); // DB numeric (may arrive as string)
+const Flag = t.Union([t.Boolean(), t.Number(), t.String()]);
 const NumNull = t.Union([t.Number(), t.String(), t.Null()]);
 const Str = t.String();
 const StrNull = t.Union([t.String(), t.Null()]);
@@ -68,6 +69,7 @@ export const UserItem = obj({
   role_name: Str,
   status_id: Num,
   status_name: Str,
+  organization_name: t.Optional(Str),
   created_at_utc: Utc,
   updated_at_utc: Utc
 });
@@ -80,9 +82,9 @@ export const ApiItem = obj({
   name: Str,
   base_path: Str,
   target_url: Str,
-  is_public: Num,
-  is_enabled: Num,
-  always_on: Num,
+  is_public: Flag,
+  is_enabled: Flag,
+  always_on: Flag,
   created_at_utc: Utc,
   updated_at_utc: Utc,
   organization_name: t.Optional(Str)
@@ -97,7 +99,7 @@ export const WindowItem = obj({
   day_of_week: Num,
   start_time: Str,
   end_time: Str,
-  is_active: Num,
+  is_active: Flag,
   created_at_utc: Utc
 });
 export const WindowList = obj({ items: t.Array(WindowItem) });

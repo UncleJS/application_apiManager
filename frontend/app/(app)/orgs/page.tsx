@@ -5,6 +5,7 @@ import {
   archiveOrg,
   createOrg,
   getOrgs,
+  unarchiveOrg,
   updateOrg,
   type Org,
 } from "@/lib/api";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui";
 import { Plus, Pencil, Archive } from "lucide-react";
 import ErrorBanner from "@/components/ErrorBanner";
+import RoleGate from "@/components/RoleGate";
 import { getErrorMessage } from "@/lib/page-utils";
 
 export default function OrgsPage() {
@@ -59,7 +61,10 @@ export default function OrgsPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
-    if (!createName.trim()) return;
+    if (createName.trim().length < 2) {
+      setError("Name must be at least 2 characters");
+      return;
+    }
     setCreating(true);
     setError("");
     try {
@@ -93,6 +98,16 @@ export default function OrgsPage() {
     }
   };
 
+  const handleUnarchive = async (id: number) => {
+    setError("");
+    try {
+      await unarchiveOrg(id);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to unarchive organization"));
+    }
+  };
+
   const handleArchive = async (id: number) => {
     if (!confirm("Archive this organisation?")) return;
     setError("");
@@ -105,6 +120,7 @@ export default function OrgsPage() {
   };
 
   return (
+    <RoleGate roles={["global_admin"]}>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Organizations</h1>
@@ -127,7 +143,7 @@ export default function OrgsPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
-            <Button onClick={handleCreate} disabled={creating || !createName.trim()}>
+            <Button onClick={handleCreate} disabled={creating || createName.trim().length < 2}>
               <Plus className="h-4 w-4 mr-1" />
               Create
             </Button>
@@ -175,10 +191,16 @@ export default function OrgsPage() {
                         <Pencil className="h-3.5 w-3.5 mr-1" />
                         Edit
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleArchive(org.id)}>
-                        <Archive className="h-3.5 w-3.5 mr-1" />
-                        Archive
-                      </Button>
+                      {org.status_name === "active" ? (
+                        <Button variant="destructive" size="sm" onClick={() => handleArchive(org.id)}>
+                          <Archive className="h-3.5 w-3.5 mr-1" />
+                          Archive
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => handleUnarchive(org.id)}>
+                          Unarchive
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -215,5 +237,6 @@ export default function OrgsPage() {
         </div>
       </Dialog>
     </div>
+    </RoleGate>
   );
 }

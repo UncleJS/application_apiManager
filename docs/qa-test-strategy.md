@@ -57,7 +57,7 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `isSessionExpired`: `revoked_at_utc` stored in DB as raw string; comparison done by Luxon `fromSQL` — timezone assumption baked in | `sessions.ts:67-75` |
 | `touchSession` called BEFORE expiry check in `authenticate.ts` — no, actually after — verify order carefully | `authenticate.ts:52-57` |
 | Token is SHA-256 hash of 256-bit random — strong, but never rotated after use | `sessions.ts:14-17` |
-| Cookie is `SameSite=Lax; Secure` — HTTPS is still required for browser cookie flows | `authenticate.ts:55-62` |
+| Cookie is `SameSite=Strict; Secure` — HTTPS is still required for browser cookie flows | `authenticate.ts:55-62` |
 | Logout revokes the backing session token and clears the cookie; verify both bearer and cookie logout paths in integration tests | `routes/auth.ts:78-99` |
 
 ### P1 — RBAC / Org Isolation (`src/routes/users.ts`, `src/routes/apis.ts`, `src/routes/permissions.ts`)

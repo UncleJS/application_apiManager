@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { login } from "@/lib/api";
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@/components/ui";
+import { getMe, login } from "@/lib/api";
+import { safeReturnPath } from "@/lib/returnTo";
+import { Button, Card, CardContent, Input, Label } from "@/components/ui";
 import { KeyRound } from "lucide-react";
 
 function LoginForm() {
@@ -14,6 +15,20 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then(() => {
+        if (!cancelled) {
+          router.replace(safeReturnPath(searchParams.get("returnTo")));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -21,7 +36,7 @@ function LoginForm() {
     try {
       await login(username, password);
       const returnTo = searchParams.get("returnTo");
-      router.push(returnTo?.startsWith("/") ? returnTo : "/apis");
+      router.push(safeReturnPath(returnTo));
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");

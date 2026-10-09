@@ -69,7 +69,34 @@ function isForbiddenIpv6(ip: string): boolean {
     return true;
   }
 
+  // ff00::/8 multicast
+  if ((first & 0xff00) === 0xff00) {
+    return true;
+  }
+
   return false;
+}
+
+/** Decimal, hex, octal, and shortened numeric hosts are not DNS names. */
+export function isNonDnsHostForm(hostname: string): boolean {
+  const host = normalizeHost(hostname);
+  if (!host) {
+    return true;
+  }
+
+  const ipVersion = net.isIP(host);
+  if (ipVersion === 4) {
+    return host.split(".").some((part) => part.length > 1 && part.startsWith("0"));
+  }
+  if (ipVersion === 6) {
+    return false;
+  }
+
+  if (/^\d+$/.test(host) || /^0x[0-9a-f]+$/i.test(host)) {
+    return true;
+  }
+
+  return /^[\d.]+$/.test(host);
 }
 
 export function isForbiddenIpAddress(host: string): boolean {
@@ -92,7 +119,9 @@ export function isForbiddenHostname(hostname: string): boolean {
   );
 }
 
-export async function assertSafeTargetUrl(targetUrl: string): Promise<{ ok: true } | { ok: false; message: string }> {
+export type SafeTarget = { ok: true; address: string; family: 4 | 6 };
+
+export async function assertSafeTargetUrl(targetUrl: string): Promise<SafeTarget | { ok: false; message: string }> {
   let parsed: URL;
   try {
     parsed = new URL(targetUrl);
@@ -113,7 +142,7 @@ export async function assertSafeTargetUrl(targetUrl: string): Promise<{ ok: true
     return { ok: false, message: "Target URL hostname is required" };
   }
 
-  if (isForbiddenHostname(hostname) || isForbiddenIpAddress(hostname)) {
+  if (isNonDnsHostForm(hostname) || isForbiddenHostname(hostname) || isForbiddenIpAddress(hostname)) {
     return { ok: false, message: "Target URL points to a forbidden private or local address" };
   }
 
@@ -125,9 +154,10 @@ export async function assertSafeTargetUrl(targetUrl: string): Promise<{ ok: true
     if (records.some((record: { address: string }) => isForbiddenIpAddress(record.address))) {
       return { ok: false, message: "Target URL resolves to a forbidden private or local address" };
     }
+    const chosen = records[0];
+    const family = chosen.family === 6 ? 6 : 4;
+    return { ok: true, address: chosen.address, family };
   } catch {
     return { ok: false, message: "Target URL hostname could not be resolved safely" };
   }
-
-  return { ok: true };
 }

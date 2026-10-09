@@ -2,7 +2,16 @@
   auto_https disable_redirects
 }
 
+(security_headers) {
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    X-Frame-Options DENY
+  }
+}
+
 https://localhost:55000 {
+  import security_headers
   route {
     handle_path /api/* {
       reverse_proxy 127.0.0.1:3001 {
@@ -12,7 +21,7 @@ https://localhost:55000 {
     }
 
     handle {
-      reverse_proxy api-manager-pod:3000
+      reverse_proxy 127.0.0.1:3000
     }
   }
 
@@ -20,14 +29,10 @@ https://localhost:55000 {
 }
 
 https://localhost:55001 {
+  import security_headers
   reverse_proxy 127.0.0.1:3001 {
     header_up Host {host}
     header_up X-Forwarded-Proto https
   }
-  tls internal
-}
-
-https://localhost:55002 {
-  reverse_proxy 127.0.0.1:80
   tls internal
 }

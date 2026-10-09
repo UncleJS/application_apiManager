@@ -11,7 +11,7 @@ export type AuthUser = {
   username?: string;
 };
 
-function normalizeRole(role: string | null | undefined): string {
+export function normalizeRole(role: string | null | undefined): string {
   if (!role) {
     return "";
   }
@@ -56,7 +56,7 @@ export const authenticatePlugin = new Elysia({ name: "authenticate" }).derive(
         set.headers["Set-Cookie"] = buildCookie(SESSION_COOKIE, "", {
           httpOnly: true,
           secure: true,
-          sameSite: "Lax",
+          sameSite: "Strict",
           path: "/",
           maxAgeSeconds: 0
         });

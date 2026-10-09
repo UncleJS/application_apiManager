@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { archiveWindow, createWindow, getWindows, type Window as ApiWindow } from "@/lib/api";
+import { archiveWindow, createWindow, getWindows, unarchiveWindow, type Window as ApiWindow } from "@/lib/api";
 import TimeSelector from "@/components/TimeSelector";
 import { Button, SelectNative, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { Trash2 } from "lucide-react";
@@ -57,6 +57,16 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
       setError(err instanceof Error ? err.message : "Failed to add window");
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleUnarchive = async (id: number) => {
+    setError("");
+    try {
+      await unarchiveWindow(id);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to unarchive window");
     }
   };
 
@@ -130,7 +140,7 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
                   </span>
                 </TableCell>
                 <TableCell>
-                  {w.is_active && (
+                  {w.is_active ? (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -139,6 +149,10 @@ export default function WindowsEditor({ subjectType, subjectId }: Props) {
                       aria-label={`Archive window for ${DAY_OPTIONS.find((d) => d.value === w.day_of_week)?.label ?? "day"}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => handleUnarchive(w.id)}>
+                      Unarchive
                     </Button>
                   )}
                 </TableCell>

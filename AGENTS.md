@@ -8,10 +8,10 @@ If guidance here conflicts with existing project conventions, follow the project
 - **Frontend**: Next.js 14 App Router + Tailwind + shadcn-compatible dark UI in `frontend/`.
 - **Infra**: Rootless Podman + systemd Quadlet units in `.quadlet/`; `infra/` kept for DB reference SQL and Caddyfile template.
 - **Scripts**: `install.sh`, `uninstall.sh`, `start.sh`, `stop.sh`, `rebuild.sh`, `dev.sh`, `logs.sh`, `seed.sh` in `scripts/`.
-- **Dev container**: `Containerfile.dev` (UBI10-minimal + Bun) + `.quadlet/api-manager-dev.container`.
-- Frontend and phpMyAdmin served over HTTPS via Caddy (config written to named volume by `install.sh`).
+- **Dev container**: `Containerfile.dev` (`oven/bun`) + `.quadlet/api-manager-dev.container`.
+- Frontend is served over HTTPS via Caddy. phpMyAdmin is opt-in (`ENABLE_PHPMYADMIN=true` or `scripts/install.sh --enable-phpmyadmin`).
 - Auth uses DB-backed sessions with cookie `api_manager_session`.
-- OpenAPI spec at `/openapi.json`; Swagger UI at `/docs` (served by Elysia's `@elysiajs/swagger`).
+- OpenAPI spec at `/openapi.json` and Swagger UI at `/docs` only when `DOCS_ENABLED=true`.
 - No Cursor or Copilot rules were found (`.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`).
 
 ## Build, lint, and test commands
@@ -46,7 +46,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - Container names are explicit (no `_1` suffix), e.g., `api-manager-backend`, `api-manager-mariadb`.
 
 ### Tests
-- No automated tests configured yet.
+- Tests: `bun test` from `backend/` and from `frontend/` (`BOOTSTRAP_ADMIN=false` is set by the backend `npm test` / `bun test` script).
 
 ### Health checks
 - Healthchecks are configured in Quadlet container units (`.quadlet/*.container`) for DB, backend, and frontend.

@@ -1,7 +1,7 @@
 [Unit]
 Description=API Manager - Caddy Edge Proxy
-After=api-manager-frontend.service api-manager-phpmyadmin.service
-Requires=api-manager-frontend.service api-manager-phpmyadmin.service
+After=api-manager-frontend.service
+Requires=api-manager-frontend.service
 
 [Container]
 Image=docker.io/library/caddy:2.9
@@ -9,6 +9,12 @@ ContainerName=api-manager-edge
 Pod=api-manager-pod.pod
 Volume=api-manager-caddy-config.volume:/etc/caddy:Z
 Volume=api-manager-caddy-data.volume:/data:Z
+NoNewPrivileges=true
+Memory=256m
+HealthCmd=/usr/bin/caddy version
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
 
 [Service]
 Restart=always

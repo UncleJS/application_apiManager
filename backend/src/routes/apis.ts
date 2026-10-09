@@ -8,6 +8,7 @@ import { serializeUtcFields } from "../utils/datetime";
 import { requireRole } from "../middleware/requireRole";
 import { assertSafeTargetUrl } from "../utils/network";
 import { query, type QueryValue } from "../db/index";
+import { resolveListLimit } from "../utils/listLimit";
 import type { ProtectedContext } from "../types/http";
 import { ApiList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
@@ -24,6 +25,7 @@ const RESERVED_BASE_PATHS = [
   "/docs",
   "/openapi.json",
   "/healthz",
+  "/readyz",
   "/login"
 ];
 
@@ -62,12 +64,31 @@ function isDuplicateEntryError(error: unknown): boolean {
 }
 
 function validateBasePath(basePath: string): string | null {
-  if (!basePath.startsWith("/")) {
-    return "Base path must start with /";
+  if (!basePath.startsWith("/") || basePath.startsWith("//")) {
+    return "Base path must start with a single /";
   }
 
   if (basePath === "/") {
     return "Base path / is not allowed";
+  }
+
+  if (basePath.includes("\\") || basePath.includes("//")) {
+    return "Base path contains forbidden characters";
+  }
+
+  let decoded = basePath;
+  try {
+    decoded = decodeURIComponent(basePath);
+  } catch {
+    return "Base path is not valid";
+  }
+
+  if (decoded.includes("..") || decoded.includes("\\") || decoded.includes("//")) {
+    return "Base path contains forbidden characters";
+  }
+
+  if (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/.test(basePath)) {
+    return "Base path contains unsupported characters";
   }
 
   if (RESERVED_BASE_PATHS.some((reserved) => basePath === reserved || basePath.startsWith(`${reserved}/`))) {
@@ -81,20 +102,21 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
   .get("/", async (context) => {
     const { authUser, _authError, set } = context as unknown as ProtectedContext;
     if (!authUser) { set.status = 401; return _authError; }
+    const limit = resolveListLimit((context as unknown as ProtectedContext<{ limit?: string }>).query?.limit);
     if (authUser.role === "global_admin") {
       const rows = await db.execute(
-        sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id`
+        sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id ORDER BY a.id ASC LIMIT ${limit}`
       );
       return serializeUtcFields({ items: rows[0] });
     }
     if (authUser.role === "org_admin") {
       const rows = await db.execute(
-        sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id WHERE a.organization_id = ${authUser.organizationId}`
+        sql`SELECT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id WHERE a.organization_id = ${authUser.organizationId} ORDER BY a.id ASC LIMIT ${limit}`
       );
       return serializeUtcFields({ items: rows[0] });
     }
     const rows = await db.execute(
-      sql`SELECT DISTINCT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id LEFT JOIN user_api_permissions p ON a.id = p.api_id WHERE a.organization_id = ${authUser.organizationId} AND (a.is_public = 1 OR p.user_id = ${authUser.id})`
+      sql`SELECT DISTINCT a.*, o.name as organization_name FROM api_definitions a JOIN organizations o ON a.organization_id = o.id LEFT JOIN user_api_permissions p ON a.id = p.api_id WHERE a.organization_id = ${authUser.organizationId} AND (a.is_public = 1 OR p.user_id = ${authUser.id}) ORDER BY a.id ASC LIMIT ${limit}`
     );
     return serializeUtcFields({ items: rows[0] });
   }, { response: { 200: ApiList, ...authErrors } })
@@ -269,6 +291,32 @@ export const apisPlugin = new Elysia({ prefix: "/apis" })
       organizationId: targetOrgId,
       userId: authUser.id,
       actionCode: "API_ARCHIVE",
+      entityName: "api",
+      entityId: apiId,
+      metadata: {},
+      createdAtUtc: now
+    });
+    return { ok: true };
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } })
+  .post("/:id/unarchive", async (context) => {
+    const { params, authUser, _authError, set } = context as unknown as ProtectedContext<Record<string, unknown>, unknown, ApiParams>;
+    if (!authUser) { set.status = 401; return _authError; }
+    const roleError = requireRole(["global_admin", "org_admin"])(authUser);
+    if (roleError) { set.status = roleError.status; return roleError.error; }
+    const apiId = Number.parseInt(params.id, 10);
+    if (Number.isNaN(apiId)) { set.status = 400; return buildError("INVALID_REQUEST", "Invalid API id"); }
+    const targetOrgId = await getApiOrganizationId(apiId);
+    if (!targetOrgId) { set.status = 404; return buildError("NOT_FOUND", "API not found"); }
+    if (authUser.role === "org_admin" && targetOrgId !== authUser.organizationId) {
+      set.status = 403;
+      return buildError("FORBIDDEN", "Cannot unarchive APIs outside your organization");
+    }
+    const now = nowUtc();
+    await db.execute(sql`UPDATE api_definitions SET is_enabled = 1, updated_at_utc = ${now} WHERE id = ${apiId}`);
+    await logAudit({
+      organizationId: targetOrgId,
+      userId: authUser.id,
+      actionCode: "API_UNARCHIVE",
       entityName: "api",
       entityId: apiId,
       metadata: {},

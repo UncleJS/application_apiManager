@@ -4,8 +4,7 @@ import { hashPassword } from "../auth";
 import { db, pool } from "../db/client";
 import { sql } from "drizzle-orm";
 import { nowUtc, toUtcSql } from "../utils/datetime";
-
-const DEFAULT_PASSWORD = "010203!@";
+import { assertSeedAllowed, assertSeedPassword } from "../utils/seedGuard";
 
 const LOOKUP_TABLES = {
   organization_statuses: "organization_statuses",
@@ -18,7 +17,7 @@ type BatchConnection = PoolConnection & {
 };
 
 function getSeedPassword(): string {
-  return process.env.SEED_USER_PASSWORD?.trim() || process.env.BOOTSTRAP_ADMIN_PASSWORD?.trim() || DEFAULT_PASSWORD;
+  return assertSeedPassword();
 }
 
 async function getIdByName(table: keyof typeof LOOKUP_TABLES, name: string): Promise<number> {
@@ -111,6 +110,7 @@ async function replaceAssignments(userId: number, apiIds: number[]) {
 }
 
 export async function seedDevData(globalOrgId: number): Promise<void> {
+  assertSeedPassword();
   const orgStatusId = await getIdByName("organization_statuses", "active");
   const userStatusId = await getIdByName("user_statuses", "active");
   const globalAdminRoleId = await getIdByName("roles", "global_admin");
@@ -160,6 +160,7 @@ export async function seedDevData(globalOrgId: number): Promise<void> {
 }
 
 export async function seedAccessLogs(timezone: string): Promise<void> {
+  assertSeedAllowed();
   const existingRows = await db.execute(sql`SELECT COUNT(*) as count FROM access_logs`);
   const existing = existingRows[0] as unknown as { count: number }[];
   if (existing && existing[0]?.count > 0) {
@@ -308,6 +309,7 @@ async function runSeed() {
   if (!seedData && !seedAccess) {
     return;
   }
+  assertSeedAllowed();
   const globalOrgId = await ensureGlobalOrgId();
   if (seedData) {
     await seedDevData(globalOrgId);

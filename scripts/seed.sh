@@ -16,6 +16,7 @@ printf '\033[1;36m▶ Running seed (SEED_DATA=%s SEED_ACCESS_LOGS=%s)...\033[0m\
 podman exec \
   -e SEED_DATA="$SEED_DATA" \
   -e SEED_ACCESS_LOGS="$SEED_ACCESS_LOGS" \
+  -e ALLOW_SEED=true \
   api-manager-backend bun run seed
 
 printf '\033[0;32mSeed complete.\033[0m\n'

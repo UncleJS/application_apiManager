@@ -12,3 +12,13 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
+
+let dummyPasswordHash: string | null = null;
+
+/** Runs a real bcrypt compare when the account does not exist, so login timing stays even. */
+export async function verifyAgainstDummy(password: string): Promise<void> {
+  if (!dummyPasswordHash) {
+    dummyPasswordHash = await hashPassword("timing-pad");
+  }
+  await verifyPassword(password, dummyPasswordHash);
+}

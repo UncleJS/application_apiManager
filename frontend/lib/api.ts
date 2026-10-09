@@ -19,6 +19,7 @@ export type User = {
   id: number;
   username: string;
   role: string;
+  role_id?: number;
   role_name: string;
   organization_id: number;
   organization_name: string;
@@ -43,7 +44,6 @@ export type ApiRecord = {
   always_on: boolean;
   organization_id: number;
   organization_name: string;
-  status_name: string;
 };
 
 export type Window = {
@@ -153,8 +153,16 @@ export async function login(username: string, password: string) {
   });
 }
 
+export type IdResult = { id: number };
+export type OkResult = { ok: true };
+
 export async function getMe() {
-  return request<{ user: User }>("/auth/me");
+  return request<{ user: {
+    id: number;
+    role: string;
+    organizationId: number;
+    username?: string;
+  } }>("/auth/me");
 }
 
 export async function logout() {
@@ -167,15 +175,19 @@ export async function getOrgs() {
 }
 
 export async function createOrg(data: { name: string }) {
-  return request<Org>("/orgs", { method: "POST", body: JSON.stringify(data) });
+  return request<IdResult>("/orgs", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function updateOrg(id: number, data: { name?: string; statusId?: number }) {
-  return request<Org>(`/orgs/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return request<OkResult>(`/orgs/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }
 
 export async function archiveOrg(id: number) {
-  return request(`/orgs/${id}/archive`, { method: "POST" });
+  return request<OkResult>(`/orgs/${id}/archive`, { method: "POST" });
+}
+
+export async function unarchiveOrg(id: number) {
+  return request<OkResult>(`/orgs/${id}/unarchive`, { method: "POST" });
 }
 
 // Users
@@ -189,7 +201,7 @@ export async function createUser(data: {
   organizationId: number;
   roleId: number;
 }) {
-  return request<User>("/users", { method: "POST", body: JSON.stringify(data) });
+  return request<IdResult>("/users", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function updateUser(
@@ -202,11 +214,15 @@ export async function updateUser(
     statusId?: number;
   }
 ) {
-  return request<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return request<OkResult>(`/users/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }
 
 export async function archiveUser(id: number) {
-  return request(`/users/${id}/archive`, { method: "POST" });
+  return request<OkResult>(`/users/${id}/archive`, { method: "POST" });
+}
+
+export async function unarchiveUser(id: number) {
+  return request<OkResult>(`/users/${id}/unarchive`, { method: "POST" });
 }
 
 // APIs
@@ -223,7 +239,7 @@ export async function createApi(data: {
   isEnabled?: boolean;
   alwaysOn?: boolean;
 }) {
-  return request<ApiRecord>("/apis", { method: "POST", body: JSON.stringify(data) });
+  return request<IdResult>("/apis", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function updateApi(
@@ -238,11 +254,15 @@ export async function updateApi(
     organizationId?: number;
   }
 ) {
-  return request<ApiRecord>(`/apis/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return request<OkResult>(`/apis/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }
 
 export async function archiveApi(id: number) {
-  return request(`/apis/${id}/archive`, { method: "POST" });
+  return request<OkResult>(`/apis/${id}/archive`, { method: "POST" });
+}
+
+export async function unarchiveApi(id: number) {
+  return request<OkResult>(`/apis/${id}/unarchive`, { method: "POST" });
 }
 
 // Permissions
@@ -272,18 +292,22 @@ export async function createWindow(data: {
   startTime: string;
   endTime: string;
 }) {
-  return request<Window>("/windows", { method: "POST", body: JSON.stringify(data) });
+  return request<IdResult>("/windows", { method: "POST", body: JSON.stringify(data) });
 }
 
 export async function updateWindow(
   id: number,
   data: { dayOfWeek?: number; startTime?: string; endTime?: string; isActive?: boolean }
 ) {
-  return request<Window>(`/windows/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return request<OkResult>(`/windows/${id}`, { method: "PUT", body: JSON.stringify(data) });
 }
 
 export async function archiveWindow(id: number) {
-  return request(`/windows/${id}/archive`, { method: "POST" });
+  return request<OkResult>(`/windows/${id}/archive`, { method: "POST" });
+}
+
+export async function unarchiveWindow(id: number) {
+  return request<OkResult>(`/windows/${id}/unarchive`, { method: "POST" });
 }
 
 // Lookups

@@ -10,12 +10,14 @@ import { requireRole } from "../middleware/requireRole";
 import type { ResultSetHeader } from "mysql2/promise";
 import type { AuthUser } from "../middleware/authenticate";
 import { query, type QueryValue } from "../db/index";
+import { resolveListLimit } from "../utils/listLimit";
 import type { ProtectedContext } from "../types/http";
 import { WindowList, OkResponse, IdResponse, ErrorResponse, authErrors } from "../schemas/responses";
 
 type WindowsQuery = {
   subjectType?: string;
   subjectId?: string;
+  limit?: string;
 };
 
 type WindowBody = {
@@ -96,8 +98,9 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
     if (!organizationId) { set.status = 404; return buildError("NOT_FOUND", "Subject not found"); }
     const accessError = ensureWindowAccess(authUser, organizationId);
     if (accessError) { set.status = accessError.status; return accessError.error; }
+    const limit = resolveListLimit(query.limit);
     const rows = await db.execute(
-      sql`SELECT id, subject_type, subject_id, day_of_week, start_time, end_time, is_active, created_at_utc FROM access_windows WHERE subject_type = ${subjectType} AND subject_id = ${subjectId}`
+      sql`SELECT id, subject_type, subject_id, day_of_week, start_time, end_time, is_active, created_at_utc FROM access_windows WHERE subject_type = ${subjectType} AND subject_id = ${subjectId} ORDER BY id ASC LIMIT ${limit}`
     );
     return serializeUtcFields({ items: rows[0] });
   }, { response: { 200: WindowList, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } })
@@ -205,6 +208,27 @@ export const windowsPlugin = new Elysia({ prefix: "/windows" })
       organizationId: scope.organizationId,
       userId: authUser.id,
       actionCode: "WINDOW_ARCHIVE",
+      entityName: "window",
+      entityId: windowId,
+      metadata: {},
+      createdAtUtc: nowUtc()
+    });
+    return { ok: true };
+  }, { response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse, ...authErrors } })
+  .post("/:id/unarchive", async (context) => {
+    const { params, authUser, _authError, set } = context as unknown as ProtectedContext<Record<string, unknown>, unknown, WindowParams>;
+    if (!authUser) { set.status = 401; return _authError; }
+    const windowId = Number.parseInt(params.id, 10);
+    if (Number.isNaN(windowId)) { set.status = 400; return buildError("INVALID_REQUEST", "Invalid window id"); }
+    const scope = await getWindowScope(windowId);
+    if (!scope) { set.status = 404; return buildError("NOT_FOUND", "Window not found"); }
+    const accessError = ensureWindowAccess(authUser, scope.organizationId);
+    if (accessError) { set.status = accessError.status; return accessError.error; }
+    await db.execute(sql`UPDATE access_windows SET is_active = 1 WHERE id = ${windowId}`);
+    await logAudit({
+      organizationId: scope.organizationId,
+      userId: authUser.id,
+      actionCode: "WINDOW_UNARCHIVE",
       entityName: "window",
       entityId: windowId,
       metadata: {},

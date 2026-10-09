@@ -40,23 +40,23 @@ First-time setup. Idempotent — safe to re-run.
 
 **What it does:**
 1. Checks prerequisites (`podman`, `python3`, `.env`)
-2. Enables systemd user linger
+2. Asks about systemd user linger, or honours `--enable-linger` / `--no-linger`
 3. Normalises `.env` — patches missing aliases (`DB_*` ← `MARIADB_*`, `NEXT_PUBLIC_API_URL` ← `VITE_API_BASE_URL`) and auto-generates strong passwords for `BOOTSTRAP_ADMIN_PASSWORD` and `SEED_USER_PASSWORD` if they are still set to placeholder values
-4. Copies Quadlet units from `.quadlet/` → `~/.config/containers/systemd/` and rewrites the `EnvironmentFile=` path
+4. Copies Quadlet units from `.quadlet/` → `~/.config/containers/systemd/` and rewrites the `EnvironmentFile=` path. phpMyAdmin is included only with `--enable-phpmyadmin` or `ENABLE_PHPMYADMIN=true`
 5. Runs `systemctl --user daemon-reload`
 6. Builds `api-manager-backend:latest` and `api-manager-frontend:latest`
 7. Creates named volumes (`api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`)
 8. Seeds the `Caddyfile` into the `api-manager-caddy-config` volume
 9. Starts the pod and MariaDB, waits for DB readiness
 10. Runs Drizzle migrations inside the backend container
-11. Optionally runs the seed script if `SEED_DATA=true` in `.env`
+11. Optionally runs the seed script if `SEED_DATA=true` in `.env`, with `ALLOW_SEED=true` on that one-shot container only
 
 **Usage:**
 ```bash
 scripts/install.sh
 ```
 
-**No options or arguments.**
+**Options:** `--enable-linger`, `--no-linger`, `--enable-phpmyadmin`.
 
 ---
 
@@ -64,7 +64,7 @@ scripts/install.sh
 
 Start all production services.
 
-**What it does:** Starts `api-manager-pod-pod.service` then all individual container services (mariadb, backend, frontend, phpmyadmin, edge/Caddy).
+**What it does:** Starts the pod, MariaDB, backend, frontend, and Caddy. phpMyAdmin starts only when its unit is installed.
 
 **Usage:**
 ```bash
@@ -77,8 +77,8 @@ scripts/start.sh
 |------------|------------------------------|
 | Frontend   | https://localhost:55000      |
 | Backend    | https://localhost:55001      |
-| phpMyAdmin | https://localhost:55002      |
-| API Docs   | https://localhost:55001/docs |
+| phpMyAdmin | https://localhost:55002 when enabled |
+| API Docs   | https://localhost:55001/docs when `DOCS_ENABLED=true` |
 
 **No options or arguments.**
 
@@ -138,8 +138,8 @@ scripts/uninstall.sh --purge     # remove units AND delete named volumes (irreve
 | Volume                   | Contents                   |
 |--------------------------|----------------------------|
 | `api-manager-db`         | MariaDB data directory     |
-| `api-manager-tls`        | Caddy TLS certificates     |
-| `api-manager-jwt`        | JWT signing keys           |
+| `api-manager-tls`        | Unused legacy volume (Caddy data is `api-manager-caddy-data`) |
+| `api-manager-jwt`        | Unused legacy volume       |
 | `api-manager-caddy-config` | Caddy configuration      |
 | `api-manager-caddy-data` | Caddy ACME / data          |
 | `api-manager-dev`        | Dev container layer cache  |
@@ -215,7 +215,7 @@ scripts/logs.sh dev              # tail dev container only
 
 ### `seed.sh`
 
-Run the seed script inside the running backend container. Reads `SEED_DATA` and `SEED_ACCESS_LOGS` from `.env` by default; both can be overridden inline.
+Run the seed script inside the running backend container. Reads `SEED_DATA` and `SEED_ACCESS_LOGS` from `.env` by default; both can be overridden inline. The command sets `ALLOW_SEED=true` so the production image accepts that one-shot run.
 
 **Usage:**
 ```bash

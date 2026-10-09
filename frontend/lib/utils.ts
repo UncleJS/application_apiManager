@@ -18,7 +18,7 @@ export function parseUtcDate(value: string | Date | null | undefined): Date | nu
 }
 
 /**
- * Format a UTC date string or Date to SAST (Africa/Johannesburg) as "YYYY-MM-DD HH:mm:ss"
+ * Format a UTC date string or Date to SAST (Africa/Johannesburg) as "YYYY-MM-DD HH:mm"
  */
 export function formatSast(value: string | Date | null | undefined): string {
   if (!value) return "—";
@@ -32,14 +32,13 @@ export function formatSast(value: string | Date | null | undefined): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
   });
 
   const parts = formatter.formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "00";
 
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
 export function normalizeRole(role: string | null | undefined): string {

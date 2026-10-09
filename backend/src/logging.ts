@@ -53,10 +53,16 @@ async function getDenyReasonId(code: string): Promise<number | null> {
 async function getAuditActionId(code: string): Promise<number> {
   const rows = await db.execute(sql`SELECT id FROM audit_actions WHERE code = ${code}`);
   const data = rows[0] as unknown as { id: number }[];
-  if (!data || data.length === 0) {
+  if (data && data.length > 0) {
+    return data[0].id;
+  }
+  await db.execute(sql`INSERT IGNORE INTO audit_actions (code) VALUES (${code})`);
+  const created = await db.execute(sql`SELECT id FROM audit_actions WHERE code = ${code}`);
+  const createdRows = created[0] as unknown as { id: number }[];
+  if (!createdRows || createdRows.length === 0) {
     throw new Error(`Unknown audit action: ${code}`);
   }
-  return data[0].id;
+  return createdRows[0].id;
 }
 
 async function getAuditEntityId(name: string): Promise<number> {

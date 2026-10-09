@@ -24,8 +24,9 @@ let ready = false;
 async function start() {
   await runBootstrap();
 
-  const app = new Elysia()
-    .use(
+  const app = new Elysia();
+  if (config.docsEnabled) {
+    app.use(
       swagger({
         path: "/docs",
         specPath: "/openapi.json",
@@ -42,7 +43,9 @@ async function start() {
           }
         }
       })
-    )
+    );
+  }
+  app
     .use(
       cors({
         origin: config.corsOrigin,
@@ -116,7 +119,11 @@ async function start() {
     });
 
   console.log(`API Manager internal HTTP running at http://${config.host}:${config.port}`);
-  console.log("Public API/Swagger is expected via Caddy on https://localhost:55001");
+  console.log(
+    config.docsEnabled
+      ? "Swagger is enabled at /docs"
+      : "Swagger is disabled. Set DOCS_ENABLED=true to expose /docs"
+  );
 
   ready = true;
 

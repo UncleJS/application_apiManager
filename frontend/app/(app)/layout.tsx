@@ -11,7 +11,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login");
+      const path = `${window.location.pathname}${window.location.search}`;
+      router.push(`/login?returnTo=${encodeURIComponent(path)}`);
     }
   }, [user, loading, router]);
 

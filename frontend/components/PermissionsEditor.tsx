@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { assignPermission, getApis, getPermissions, unassignPermission, type ApiRecord } from "@/lib/api";
 
 interface Props {
@@ -13,13 +13,14 @@ export default function PermissionsEditor({ userId, organizationId }: Props) {
   const [assigned, setAssigned] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const pending = useRef(new Set<number>());
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const [apiData, permData] = await Promise.all([getApis(), getPermissions(userId)]);
-      setApis(apiData.items.filter((a) => a.organization_id === organizationId));
+      setApis(apiData.items.filter((a) => Number(a.organization_id) === Number(organizationId)));
       setAssigned(permData.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load permissions");
@@ -33,13 +34,15 @@ export default function PermissionsEditor({ userId, organizationId }: Props) {
   }, [load]);
 
   const toggle = async (apiId: number) => {
+    if (pending.current.has(apiId)) {
+      return;
+    }
+    pending.current.add(apiId);
     const wasAssigned = assigned.includes(apiId);
-    const nextAssigned = wasAssigned
-      ? assigned.filter((id: number) => id !== apiId)
-      : [...assigned, apiId];
-
     setError("");
-    setAssigned(nextAssigned);
+    setAssigned((current) =>
+      wasAssigned ? current.filter((id) => id !== apiId) : [...current, apiId]
+    );
 
     try {
       if (wasAssigned) {
@@ -48,17 +51,21 @@ export default function PermissionsEditor({ userId, organizationId }: Props) {
         await assignPermission({ userId, apiId });
       }
     } catch (err) {
-      setAssigned(assigned);
+      setAssigned((current) =>
+        wasAssigned ? (current.includes(apiId) ? current : [...current, apiId]) : current.filter((id) => id !== apiId)
+      );
       setError(err instanceof Error ? err.message : "Failed to update permissions");
+    } finally {
+      pending.current.delete(apiId);
     }
   };
 
   if (loading) return <p className="text-sm text-foreground/70">Loading permissions…</p>;
-  if (error) return <p className="text-sm text-destructive">{error}</p>;
-  if (apis.length === 0) return <p className="text-sm text-foreground/70">No APIs in this organisation.</p>;
+  if (apis.length === 0 && !error) return <p className="text-sm text-foreground/70">No APIs in this organisation.</p>;
 
   return (
     <div className="space-y-2">
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <h3 className="text-sm font-semibold">Assigned APIs</h3>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {apis.map((api) => (
