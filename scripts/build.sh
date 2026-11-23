@@ -19,8 +19,10 @@ case "$TARGET" in
 esac
 
 # The final image and every intermediate layer image carry the repo label, so
-# uninstall.sh can remove the build cache without touching other repos.
+# uninstall.sh can remove the build cache without touching other repos. Job
+# builds keep no layer cache, so a job and the main install never share layers.
 build_opts=(--label "$IMAGE_LABEL" --layer-label "$IMAGE_LABEL")
+if [ -n "$JOB" ]; then build_opts+=(--layers=false); fi
 
 if [ "$TARGET" != "frontend" ]; then
   step "Building backend image ($IMAGE_BACKEND)"

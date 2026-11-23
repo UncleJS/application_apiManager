@@ -8,6 +8,7 @@
 # Without JOB the names are unchanged; PORT_OFFSET defaults to 0.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR" || exit 1
 QUADLET_DIR="$ROOT_DIR/.quadlet"
 SYSTEMD_DIR="$HOME/.config/containers/systemd"
 ENV_FILE="$ROOT_DIR/.env"

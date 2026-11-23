@@ -48,9 +48,14 @@ if [ "$PURGE" = "true" ] && [ -z "$JOB" ]; then
   confirm=""
   read -r confirm || true
   if [ "$confirm" != "YES" ]; then
-    yellow "  Purge not confirmed; volumes will be kept."
-    PURGE=false
+    red "Purge not confirmed; nothing was removed. Re-run without --purge to keep the data."
+    exit 1
   fi
+fi
+
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+  red "ERROR: no systemd user session (is XDG_RUNTIME_DIR set?); nothing was removed."
+  exit 1
 fi
 
 mapfile -t services < <(all_services)
@@ -100,9 +105,23 @@ if podman pod exists "$POD_NAME"; then podman pod rm -f "$POD_NAME" >/dev/null &
 
 # ── images ────────────────────────────────────────────────────────────────────
 step "Removing images built by the repo"
+# Parent layer images of the repo images, recorded before the tags go: images
+# built before build.sh labelled its layers have unlabelled intermediates.
+mapfile -t parents < <(for img in "${repo_images[@]}"; do
+  if podman image exists "$img"; then podman history -q --no-trunc "$img" | grep -v '<missing>' || true; fi
+done | sort -u)
 for img in "${repo_images[@]}"; do
   if podman image exists "$img"; then podman rmi -f "$img" >/dev/null && green "  removed image $img"; fi
 done
+# Untagged parents only; a tagged parent is a base image, handled below. Removal
+# without -f fails while another image still builds on the layer, which keeps it.
+removed=0
+for id in ${parents[@]+"${parents[@]}"}; do
+  podman image exists "$id" || continue
+  [ -z "$(podman image inspect --format '{{join .RepoTags " "}}' "$id" 2>/dev/null)" ] || continue
+  if podman rmi "$id" >/dev/null 2>&1; then removed=$((removed + 1)); fi
+done
+if [ "$removed" -gt 0 ]; then green "  removed $removed unlabelled parent layer image(s)"; fi
 # Intermediate and dangling layers: build.sh and dev.sh label every layer image.
 mapfile -t layers < <(podman images -a -q --filter "label=$IMAGE_LABEL" | sort -u)
 if [ "${#layers[@]}" -gt 0 ]; then
@@ -120,8 +139,11 @@ for img in "${BASE_IMAGES[@]}"; do
     yellow "  kept $img: used by container(s) $users"
     continue
   fi
-  # Other Quadlet units (other installs or repos) that still run this image.
-  refs="$(grep -lsFx "Image=$img" "$SYSTEMD_DIR"/*.container 2>/dev/null \
+  # Other Quadlet units (other installs or repos, any unit type) that still use
+  # this image, by full or short name.
+  short="${img#docker.io/}"; short="${short#library/}"
+  pat="^[[:space:]]*Image[[:space:]]*=[[:space:]]*(docker\.io/)?(library/)?${short//./\\.}[[:space:]]*\$"
+  refs="$(grep -rlsE "$pat" "$SYSTEMD_DIR" 2>/dev/null \
     | grep -vFx -f <(printf '%s\n' "${units[@]}") | xargs -r -n1 basename | words || true)"
   if [ -n "$refs" ]; then
     yellow "  kept $img: referenced by other Quadlet unit(s) $refs"
@@ -199,6 +221,13 @@ if [ "$REMOVE_QUADLETS" = "true" ]; then
   report "systemd units" "$(list_units | awk '{print $1}' | only "${services[@]}" | words)"
 elif [ -n "$present_units" ]; then
   yellow "  kept Quadlet units (use --remove-quadlets to delete): $present_units"
+fi
+# Working containers of an interrupted build carry no repo label; list them so
+# they can be checked by hand (they may belong to another repo's build).
+builders="$(podman ps -a --external --format '{{.Names}}' | grep -E '(bun|working-container)' | grep -vFx -f <(podman ps -a --format '{{.Names}}') | words || true)"
+if [ -n "$builders" ]; then yellow "  build containers not owned by a pod (check by hand): $builders"; fi
+if [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)" = "yes" ]; then
+  yellow "  systemd linger is still enabled for $USER (install.sh --enable-linger); disable with: loginctl disable-linger $USER"
 fi
 kept_base="$(podman images --format '{{.Repository}}:{{.Tag}}' | only "${BASE_IMAGES[@]}" | words)"
 if [ -n "$kept_base" ]; then yellow "  shared base images still present (see above): $kept_base"; fi

@@ -91,7 +91,9 @@ fi
 systemctl --user daemon-reload
 
 step "Building $IMAGE_DEV"
-podman build --label "$IMAGE_LABEL" --layer-label "$IMAGE_LABEL" -f "$ROOT_DIR/Containerfile.dev" -t "$IMAGE_DEV" "$ROOT_DIR"
+dev_opts=(--label "$IMAGE_LABEL" --layer-label "$IMAGE_LABEL")
+if [ -n "$JOB" ]; then dev_opts+=(--layers=false); fi
+podman build "${dev_opts[@]}" -f "$ROOT_DIR/Containerfile.dev" -t "$IMAGE_DEV" "$ROOT_DIR"
 
 step "Restarting $(svc dev)"
 systemctl --user start "$POD_SERVICE" >/dev/null 2>&1 || true
