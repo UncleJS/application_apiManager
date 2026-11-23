@@ -1,20 +1,33 @@
 # QA & Test Strategy — apiManager
+
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](../LICENSE.md)
+[![Bun](https://img.shields.io/badge/Bun-runtime-000000?logo=bun&logoColor=white)](../backend/package.json)
+[![Elysia](https://img.shields.io/badge/Elysia-backend-f472b6)](../backend/package.json)
+[![Tests: bun test](https://img.shields.io/badge/tests-bun_test-f59e0b)](../backend/package.json)
+
 > Updated: 2026-04-05 | Refresh when tests, auth, or proxy behavior changes.
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-![Backend](https://img.shields.io/badge/backend-Bun%20%2B%20Elysia-f472b6)
-![Testing](https://img.shields.io/badge/testing-bun%3Atest-f59e0b)
-
 ## Table of Contents
+
 - [0. Baseline: Current Test Coverage](#0-baseline-current-test-coverage)
-- [1. High-Risk Workflows](#1-high-risk-workflows-priority-ordered)
+- [1. High-Risk Workflows (priority-ordered)](#1-high-risk-workflows-priority-ordered)
+  - [P0 — Proxy Authorization Engine (`src/proxy.ts`, `src/access.ts`)](#p0--proxy-authorization-engine-srcproxyts-srcaccessts)
+  - [P0 — Session Lifecycle (`src/sessions.ts`, `src/middleware/authenticate.ts`)](#p0--session-lifecycle-srcsessionsts-srcmiddlewareauthenticatets)
+  - [P1 — RBAC / Org Isolation (`src/routes/users.ts`, `src/routes/apis.ts`, `src/routes/permissions.ts`)](#p1--rbac--org-isolation-srcroutesusersts-srcroutesapists-srcroutespermissionsts)
+  - [P1 — Access Window Validation (`src/routes/windows.ts`, `src/utils/time.ts`)](#p1--access-window-validation-srcrouteswindowsts-srcutilstimets)
+  - [P1 — Reports (`src/routes/reports.ts`)](#p1--reports-srcroutesreportsts)
+  - [P2 — Audit & Access Logging (`src/logging.ts`)](#p2--audit--access-logging-srcloggingts)
+  - [P2 — Timestamp / Timezone Correctness](#p2--timestamp--timezone-correctness)
 - [2. Test Plan](#2-test-plan)
+  - [Layer 1 — Unit Tests (no DB, pure logic)](#layer-1--unit-tests-no-db-pure-logic)
+  - [Layer 2 — Integration Tests (live DB in container)](#layer-2--integration-tests-live-db-in-container)
+  - [Layer 3 — Proxy Authorization Matrix](#layer-3--proxy-authorization-matrix)
+  - [Layer 4 — E2E (Playwright, optional / Phase 2)](#layer-4--e2e-playwright-optional--phase-2)
 - [3. Definition of Done](#3-definition-of-done)
 - [4. Release Checklist](#4-release-checklist)
 - [5. Tooling Decision](#5-tooling-decision)
 - [6. Observability / Verification Gaps](#6-observability--verification-gaps)
 - [7. Known Bugs Found During Review](#7-known-bugs-found-during-review)
-- [Footer](#footer)
 
 ---
 
@@ -30,7 +43,7 @@ Current committed coverage includes:
 
 The biggest remaining QA risk is still limited coverage around auth flows, RBAC/org isolation, reports, and the proxy authorization matrix.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -50,6 +63,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | Upstream `fetch` errors return 502 but still log access — log integrity depends on DB | `proxy.ts:189-202` |
 | `x-forwarded-for` header is trusted as-is for client IP — spoofable | `proxy.ts:20-24` |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### P0 — Session Lifecycle (`src/sessions.ts`, `src/middleware/authenticate.ts`)
 
 | Risk | Source |
@@ -60,6 +75,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | Cookie is `SameSite=Strict; Secure` — HTTPS is still required for browser cookie flows | `authenticate.ts:55-62` |
 | Logout revokes the backing session token and clears the cookie; verify both bearer and cookie logout paths in integration tests | `routes/auth.ts:78-99` |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### P1 — RBAC / Org Isolation (`src/routes/users.ts`, `src/routes/apis.ts`, `src/routes/permissions.ts`)
 
 | Risk | Source |
@@ -68,6 +85,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `permissions/unassign` has NO org check — any authenticated user can unassign any permission | `permissions.ts:40-52` |
 | `apis.put /:id` org_admin check only guards `body.organizationId`; no check that the target API belongs to their org | `apis.ts:67-70` |
 | `users.put /:id` body `organizationId` guard checks `!== undefined` but the actual SQL only runs `if (body.organizationId)` — falsy 0 skipped | `users.ts:92,104` |
+
+[↑ Back to TOC](#table-of-contents)
 
 ### P1 — Access Window Validation (`src/routes/windows.ts`, `src/utils/time.ts`)
 
@@ -78,6 +97,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | No authorization check: any org user can create windows for ANY `subjectId` (user/api outside their org) | `windows.ts:POST` |
 | `parseTimeToMinutes` rounds seconds ≥30 up — not documented, subtle | `access.ts:33-36` |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### P1 — Reports (`src/routes/reports.ts`)
 
 | Risk | Source |
@@ -87,6 +108,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `normalizeRow` casts BigInt (`COUNT(*)`) with `Number()` — safe up to 2^53, but silently wrong beyond | `reports.ts:64-80` |
 | Raw SQL in `ORG_QUERY`/`USER_QUERY` uses `sql.raw()` with array params (not template) — verify mysql2 binding order | `reports.ts:89-120` |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### P2 — Audit & Access Logging (`src/logging.ts`)
 
 | Risk | Source |
@@ -94,6 +117,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `getDenyReasonId` / `getAuditActionId` / `getAuditEntityId` throw hard errors if the lookup row is missing — unhandled audit failure crashes the response | `logging.ts:40-57` |
 | Access log INSERT is fire-and-forget within route handlers — if DB is down, the request fails mid-flight with no user-facing message | `logging.ts:3-22` |
 | `logAudit` called AFTER the data mutation succeeds — audit gap on concurrent failures | multiple routes |
+
+[↑ Back to TOC](#table-of-contents)
 
 ### P2 — Timestamp / Timezone Correctness
 
@@ -103,7 +128,7 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | `getNowSast()` in `access.ts` and window evaluation uses wall-clock in SAST — server time zone drift would silently widen/shrink access windows | `access.ts:30` |
 | `isSessionExpired` compares `DateTime.utc()` vs `fromSQL(last_activity_utc, {zone: "utc"})` — assumes DB string is UTC. Any manual DB edit in local time would grant extra idle time | `sessions.ts:67-75` |
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -128,6 +153,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | U-11 | `reports.ts` | `withTotals` aggregation: empty array, one row, multiple rows, BigInt coercion |
 | U-12 | `middleware/authenticate.ts` | `normalizeRole`: null, undefined, `" Org Admin "`, `"org-admin"` |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### Layer 2 — Integration Tests (live DB in container)
 
 **Target:** route handlers via Elysia `app.handle()` with a test MariaDB seeded from `seed.ts`
@@ -150,6 +177,8 @@ The most critical code path. Incorrectly granting proxy access = security breach
 | I-14 | `POST /windows` | user creates window for API in other org → should be 403 (currently **no check**) |
 | I-15 | `GET /reports/orgs/weekly` | valid range → correct totals; `from > to` → 400 |
 | I-16 | `GET /reports/users/weekly` | org_admin sees own org only; global_admin sees all |
+
+[↑ Back to TOC](#table-of-contents)
 
 ### Layer 3 — Proxy Authorization Matrix
 
@@ -174,6 +203,8 @@ These are critical enough to warrant a dedicated test suite against `handleProxy
 | P-15 | Window: midnight-crossing (e.g. 23:00–01:00), in range | 200 |
 | P-16 | Window: midnight-crossing, out of range | 403 |
 
+[↑ Back to TOC](#table-of-contents)
+
 ### Layer 4 — E2E (Playwright, optional / Phase 2)
 
 Low priority until integration suite is green. Smoke tests only:
@@ -182,7 +213,7 @@ Low priority until integration suite is green. Smoke tests only:
 - Archive user → user is inactive
 - Report page loads with data
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -200,7 +231,7 @@ A release is ready when:
 - [ ] UTC timestamps verified for any new time-related code
 - [ ] `AGENTS.md` updated if new test commands are added
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -220,7 +251,7 @@ A release is ready when:
 [ ] Confirm uninstall.sh --purge does not affect running services
 ```
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -246,7 +277,7 @@ A release is ready when:
 }
 ```
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -261,7 +292,7 @@ A release is ready when:
 | No request ID / correlation ID in proxy or admin API | Cannot correlate access log with upstream trace | Add `X-Request-Id` header on ingress |
 | Report BigInt overflow | Silent wrong totals above 9PB | Validate or use BigInt throughout |
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -277,11 +308,8 @@ A release is ready when:
 | BUG-06 | Low | `windows.ts:43` | Race condition retrieving last inserted window ID via `ORDER BY id DESC` |
 | BUG-07 | Low | `access.ts:33` | `parseTimeToMinutes` second-rounding not documented; inconsistent with DB `time` type precision |
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
-## Footer
-
-This page is licensed under the
-[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+© 2026 API Manager contributors — Licensed under [CC BY-NC-SA 4.0](../LICENSE.md)

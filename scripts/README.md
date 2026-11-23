@@ -1,10 +1,10 @@
 # Scripts
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-![Infra](https://img.shields.io/badge/infra-Podman%20Quadlet-892CA0)
-![Shell](https://img.shields.io/badge/shell-POSIX-4EAA25)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](../LICENSE.md)
+[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](../.quadlet/)
+[![Shell: Bash](https://img.shields.io/badge/shell-Bash-4EAA25?logo=gnubash&logoColor=white)](common.sh)
 
-POSIX shell scripts for managing the API Manager application lifecycle.
+Bash scripts for managing the API Manager application lifecycle.
 All scripts must be run from the **repo root** (or any directory — they resolve paths relative to their own location).
 
 **Requirements (host OS):**
@@ -14,22 +14,22 @@ All scripts must be run from the **repo root** (or any directory — they resolv
 - `.env` at repo root — copy from `.env.example` and fill in values before first run
 
 ## Table of Contents
+
 - [Lifecycle scripts](#lifecycle-scripts)
-  - [install.sh](#installsh)
-  - [build.sh](#buildsh)
-  - [start.sh](#startsh)
-  - [stop.sh](#stopsh)
-  - [restart.sh](#restartsh)
-  - [rebuild.sh](#rebuildsh)
-  - [uninstall.sh](#uninstallsh)
+  - [`install.sh`](#installsh)
+  - [`build.sh`](#buildsh)
+  - [`start.sh`](#startsh)
+  - [`stop.sh`](#stopsh)
+  - [`restart.sh`](#restartsh)
+  - [`rebuild.sh`](#rebuildsh)
+  - [`uninstall.sh`](#uninstallsh)
 - [Shared names and ports (common.sh)](#shared-names-and-ports-commonsh)
 - [Development scripts](#development-scripts)
-  - [dev.sh](#devsh)
-  - [logs.sh](#logssh)
-  - [seed.sh](#seedsh)
+  - [`dev.sh`](#devsh)
+  - [`logs.sh`](#logssh)
+  - [`seed.sh`](#seedsh)
 - [Environment variables](#environment-variables)
 - [Typical workflow](#typical-workflow)
-- [Footer](#footer)
 
 ---
 
@@ -61,6 +61,8 @@ scripts/install.sh
 
 **Options:** `--enable-linger`, `--no-linger`, `--enable-phpmyadmin`.
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `build.sh`
@@ -73,6 +75,8 @@ scripts/build.sh               # both images
 scripts/build.sh backend       # api-manager-backend:latest only
 scripts/build.sh frontend      # api-manager-frontend:latest only
 ```
+
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -98,6 +102,8 @@ scripts/start.sh
 
 **No options or arguments.**
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `stop.sh`
@@ -111,6 +117,8 @@ scripts/stop.sh
 
 **No options or arguments.**
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `restart.sh`
@@ -121,6 +129,8 @@ Runs `stop.sh`, then `start.sh`.
 ```bash
 scripts/restart.sh
 ```
+
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -143,25 +153,12 @@ scripts/rebuild.sh frontend      # rebuild frontend only
 
 > The pod unit is started automatically if it is not already running before restarting a container service.
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `uninstall.sh`
 
-Stop, disable, and remove all Quadlet unit files. Data volumes are **retained by default**.
-
-**Usage:**
-```bash
-scripts/uninstall.sh             # remove units, keep volumes
-scripts/uninstall.sh --purge     # remove units AND delete named volumes (irreversible)
-```
-
-| Option    | Effect                                                                 |
-|-----------|------------------------------------------------------------------------|
-| _(none)_  | Stops services, removes unit files from `~/.config/containers/systemd/`, runs `daemon-reload` |
-| `--purge` | Additionally prompts for interactive confirmation (`YES`), then deletes all named volumes |
-| `--remove-quadlets` | Job mode only (see below): also removes the job's units. Without `JOB`, units are always removed |
-
-With `JOB=<slug>` set, `uninstall.sh` touches only that job's set: it stops the job services, removes the job containers, pod and images, deletes the job volumes with `--purge` (no prompt) and the job units with `--remove-quadlets`, then lists any leftovers with the `-<slug>` suffix and exits non-zero if some remain. Shared base images (MariaDB, Caddy, phpMyAdmin, BusyBox) are kept because the main install uses them.
 
 **Volumes deleted by `--purge`** (both bare and `systemd-` prefixed variants):
 
@@ -176,7 +173,7 @@ With `JOB=<slug>` set, `uninstall.sh` touches only that job's set: it stops the 
 
 > **Warning:** `--purge` is irreversible. All database data will be lost.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -191,18 +188,18 @@ With `JOB=<slug>` set, `uninstall.sh` touches only that job's set: it stops the 
 | `API_PORT` | `1101` | Backend via Caddy HTTPS (range start + 1) |
 | `PMA_PORT` | `1102` | phpMyAdmin via Caddy HTTPS, opt-in (range start + 2) |
 
-The frontend (`3000`), backend (`3001`) and MariaDB (`3306`) ports stay inside the pod and are never published.
+The frontend, backend and MariaDB ports (pod-internal 3000, 3001 and 3306) stay inside the pod and are never published.
 
-**Parallel installs.** Set `JOB=<slug>` to suffix every name with `-<slug>`, and `PORT_OFFSET=<n>` to add `n` to every published port. The suffix and offset are applied when the units and the Caddyfile are copied to `~/.config/containers/systemd/`; the repo files stay the source. Example:
+**Parallel installs.** Set `JOB=<slug>` to suffix every name with `-<slug>`, and `PORT_OFFSET=<n>` to add `n` to every published port (base port + `PORT_OFFSET`). The suffix and offset are applied when the units and the Caddyfile are copied to `~/.config/containers/systemd/`; the repo files stay the source. Example:
 
 ```bash
-JOB=test PORT_OFFSET=3000 scripts/install.sh --no-linger   # https://localhost:4100
-JOB=test PORT_OFFSET=3000 scripts/uninstall.sh --purge --remove-quadlets
+JOB=test PORT_OFFSET=<n> scripts/install.sh --no-linger   # published ports = base port + n
+JOB=test PORT_OFFSET=<n> scripts/uninstall.sh --purge --remove-quadlets
 ```
 
 `install.sh` also points `CORS_ORIGIN` and `NEXT_PUBLIC_API_URL` at the published ports when they are empty or plain `https://localhost:<port>` values. Custom hosts are left alone.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -240,6 +237,8 @@ podman exec -it api-manager-dev sh -lc 'cd /workspace/backend && bun run dev'
 podman exec -it api-manager-dev sh -lc 'cd /workspace/frontend && bun run dev'
 ```
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `logs.sh`
@@ -267,6 +266,8 @@ scripts/logs.sh dev              # tail dev container only
 | `phpmyadmin`  | `api-manager-phpmyadmin.service`    |
 | `dev`         | `api-manager-dev.service`           |
 
+[↑ Back to TOC](#table-of-contents)
+
 ---
 
 ### `seed.sh`
@@ -288,7 +289,7 @@ SEED_DATA=true SEED_ACCESS_LOGS=true scripts/seed.sh   # enable both
 
 > The backend container (`api-manager-backend`) must be running before calling this script.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -311,7 +312,7 @@ Script-relevant variables from `.env` (full list in `.env.example`):
 | `NEXT_PUBLIC_API_URL`     | `https://localhost:1101`                    | install.sh, dev.sh | Frontend → backend API URL (aliased from `VITE_API_BASE_URL`)  |
 | `CORS_ORIGIN`             | `https://localhost:1100`                    | install.sh        | Allowed CORS origin for the backend                             |
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -343,15 +344,12 @@ scripts/logs.sh backend         # backend only
 
 # 7. Full removal
 scripts/stop.sh
-scripts/uninstall.sh            # keep data
-scripts/uninstall.sh --purge    # delete everything
+scripts/uninstall.sh                              # keep volumes and units
+scripts/uninstall.sh --purge --remove-quadlets    # delete everything
 ```
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
-## Footer
-
-This page is licensed under the
-[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+© 2026 API Manager contributors — Licensed under [CC BY-NC-SA 4.0](../LICENSE.md)

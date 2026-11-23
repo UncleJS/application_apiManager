@@ -1,10 +1,12 @@
 # Operations Guide
 
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-![Runtime](https://img.shields.io/badge/runtime-Bun%20%2B%20Next.js-f59e0b)
-![Infra](https://img.shields.io/badge/infra-Podman%20Quadlet-892CA0)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](../LICENSE.md)
+[![Bun](https://img.shields.io/badge/Bun-runtime-000000?logo=bun&logoColor=white)](../backend/package.json)
+[![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)](../frontend/package.json)
+[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](../.quadlet/)
 
 ## Table of Contents
+
 - [Quickstart (Podman Quadlet)](#quickstart-podman-quadlet)
 - [Sessions](#sessions)
 - [Health checks](#health-checks)
@@ -12,13 +14,14 @@
 - [Default admin (dev/test)](#default-admin-devtest)
 - [phpMyAdmin login](#phpmyadmin-login)
 - [Rebuild / remove](#rebuild--remove)
+  - [install.sh vs rebuild.sh](#installsh-vs-rebuildsh)
+  - [Rebuild and remove commands](#rebuild-and-remove-commands)
 - [Environment variables](#environment-variables)
 - [Ports](#ports)
 - [Reverse proxy usage](#reverse-proxy-usage)
 - [Reports date range](#reports-date-range)
 - [Access windows schema note](#access-windows-schema-note)
 - [TLS](#tls)
-- [Footer](#footer)
 
 ## Quickstart (Podman Quadlet)
 1. Copy `.env.example` to `.env`.
@@ -37,7 +40,7 @@ Notes:
 - `https://localhost:1101/healthz` is liveness. `https://localhost:1101/readyz` is readiness (database up). Swagger at `/docs` is served only when `DOCS_ENABLED=true`.
 - MariaDB has no host port; it is only reachable inside the pod.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Sessions
 - Browser sessions use an HTTP-only cookie (`api_manager_session`).
@@ -50,7 +53,7 @@ API client usage:
 - The login JSON body does **not** include the session token.
 - Non-browser clients that want bearer auth must extract the `api_manager_session` value from the `Set-Cookie` header, then send it as `Authorization: Bearer <token>`.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Health checks
 Container healthchecks are configured in Quadlet container units for:
@@ -59,7 +62,7 @@ Container healthchecks are configured in Quadlet container units for:
 - Frontend (HTTP root)
 - Edge (Caddy process check)
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Seed data (dev/test)
 `scripts/install.sh` reads seed flags from the root `.env` file.
@@ -77,7 +80,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - This can take a few minutes; progress logs print every 10k rows.
 - If access logs already exist, setup skips access log seeding.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Default admin (dev/test)
 - Username: `global-admin`
@@ -85,7 +88,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - With `SEED_DATA=true`, `global-admin` is also part of the seeded user set and uses the shared seeded-user password described above.
 - Changing `BOOTSTRAP_ADMIN_PASSWORD` does not rotate an existing `global-admin` password. Change it through the users API, which revokes that user's sessions.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## phpMyAdmin login
 - Off by default. Enable with `ENABLE_PHPMYADMIN=true` in `.env` or `scripts/install.sh --enable-phpmyadmin`. The CLI flag is written back into `.env` so a later install keeps phpMyAdmin.
@@ -93,7 +96,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Login is required (no auto-login).
 - Use the MariaDB credentials from `.env` (`MARIADB_USER` / `MARIADB_PASSWORD`).
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Rebuild / remove
 ### install.sh vs rebuild.sh
@@ -103,24 +106,28 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Use `scripts/rebuild.sh` when you need code changes to take effect immediately.
 - Neither script removes volumes or deletes data.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
+### Rebuild and remove commands
 - Rebuild containers: `scripts/rebuild.sh`
 - Stop services: `scripts/stop.sh`
-- Remove containers (keep volumes): `scripts/uninstall.sh`
-- Remove containers + volumes: `scripts/uninstall.sh --purge`
+- Remove services, containers, pod, repo-built images and unused base images (keeps volumes and Quadlet units): `scripts/uninstall.sh`
+- Also delete volumes: `scripts/uninstall.sh --purge` (asks you to type `YES` unless `JOB` is set)
+- Also remove the Quadlet units: `scripts/uninstall.sh --remove-quadlets`
+- Leave nothing behind: `scripts/uninstall.sh --purge --remove-quadlets`; it checks for leftovers and exits non-zero if any remain.
+- Parallel job install: `JOB=<slug> PORT_OFFSET=<n> scripts/uninstall.sh` targets only that job's install.
 - After you type `YES`, purge deletes the named volumes `api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`, and `api-manager-dev`, including the `systemd-` prefixed copies when they exist.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Environment variables
 Create a `.env` file at repo root (see `.env.example`).
 Scripts load `.env` automatically, even when run from `scripts/`.
 
 Backend:
-- `PORT` (internal backend port; Quadlet sets `3001` for the deployed stack)
+- `PORT` (internal backend port; Quadlet sets the pod-internal backend port)
 - `DB_HOST` (default `127.0.0.1`)
-- `DB_PORT` (default `3306`)
+- `DB_PORT` (default: the standard MariaDB port, pod-internal only)
 - `DB_USER` (default `api_manager`)
 - `DB_PASSWORD` (default `api_manager_password`)
 - `DB_DATABASE` (default `api_manager`)
@@ -143,16 +150,16 @@ Setup script:
 Frontend:
 - `NEXT_PUBLIC_API_URL` (the deployed frontend image calls `/api` through Caddy; set this only for local frontend dev, for example `https://localhost:1101`)
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Ports
-Registered range `1100-1109`; the numbers live in `scripts/common.sh`. They were `55000`-`55002` before.
+Registered range `1100-1109`; the numbers live in `scripts/common.sh`.
 - Frontend: `1100`
 - Backend HTTPS: `1101`
 - phpMyAdmin: `1102` (only when enabled)
 - MariaDB: internal only
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Reverse proxy usage
 Requests to the backend HTTPS port are routed by longest-prefix match on `base_path`.
@@ -192,7 +199,7 @@ Notes:
 - The API must be enabled and within its allowed hours (unless global admin).
 - Users can only access APIs in their org that are assigned to them.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Reports date range
 All report endpoints accept optional `from` and `to` query params (ISO date or datetime).
@@ -200,7 +207,7 @@ All report endpoints accept optional `from` and `to` query params (ISO date or d
 - If omitted, the current week or month is used.
 - The UI date picker fills `YYYY-MM-DD` and the text input keeps that format.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## Access windows schema note
 The `access_windows` table in the DB does not have foreign keys because it is polymorphic:
@@ -209,14 +216,14 @@ The `access_windows` table in the DB does not have foreign keys because it is po
 
 MariaDB cannot enforce a single FK across multiple tables, so validation is handled in the app.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
 ## TLS
 - Public HTTPS is terminated by Caddy with `tls internal` (a local CA). The backend listens on plain HTTP inside the pod.
 - The `api-manager-tls` and `api-manager-jwt` volumes are unused by the current units. They remain so existing purge scripts keep a stable volume list. Caddy certificates live in `api-manager-caddy-data`.
 
-[Go to TOC](#table-of-contents)
+[↑ Back to TOC](#table-of-contents)
 
-## Footer
-This page is licensed under the
-[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+---
+
+© 2026 API Manager contributors — Licensed under [CC BY-NC-SA 4.0](../LICENSE.md)
