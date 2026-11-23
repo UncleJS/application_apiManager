@@ -29,4 +29,6 @@ RUN mkdir -p ./public && chown nextjs:nodejs ./public
 
 USER nextjs
 EXPOSE 3000
-CMD ["bun", "server.js"]
+# Podman sets HOSTNAME to the pod name for PID 1, overriding the ENV above, so
+# Next.js would bind only to the pod IP and Caddy's 127.0.0.1:3000 upstream fails.
+CMD ["env", "HOSTNAME=0.0.0.0", "bun", "server.js"]
