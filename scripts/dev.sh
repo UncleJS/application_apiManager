@@ -91,7 +91,7 @@ fi
 systemctl --user daemon-reload
 
 step "Building $IMAGE_DEV"
-podman build --label "app=api-manager$SFX" -f "$ROOT_DIR/Containerfile.dev" -t "$IMAGE_DEV" "$ROOT_DIR"
+podman build --label "$IMAGE_LABEL" --layer-label "$IMAGE_LABEL" -f "$ROOT_DIR/Containerfile.dev" -t "$IMAGE_DEV" "$ROOT_DIR"
 
 step "Restarting $(svc dev)"
 systemctl --user start "$POD_SERVICE" >/dev/null 2>&1 || true

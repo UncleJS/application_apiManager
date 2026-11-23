@@ -76,13 +76,27 @@ VOLUMES=(
   "api-manager-caddy-data$SFX"
 )
 CADDY_CONFIG_VOLUME="systemd-api-manager-caddy-config$SFX"
-# Third-party images pulled for this repo.
+# Label put on every image (and build layer) the repo builds.
+IMAGE_LABEL="app=api-manager$SFX"
+# Third-party images pulled for this repo (runtime units, install, Containerfiles).
 BASE_IMAGES=(
+  docker.io/oven/bun:1-alpine
+  docker.io/oven/bun:1.2.15
   docker.io/library/mariadb:11.4
   docker.io/library/caddy:2.9
   docker.io/library/phpmyadmin:5.2
   docker.io/library/busybox:latest
 )
+
+# The repo creates no Podman networks (the pod uses the default network) and
+# no Podman secrets (credentials come from the repo-local .env). Listed so
+# uninstall.sh removes and checks them if that ever changes.
+NETWORKS=()
+SECRETS=()
+# Every container this install's units and scripts name (incl. the pod infra).
+all_containers() {
+  printf '%s\n' "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV" "$POD_NAME-infra"
+}
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }

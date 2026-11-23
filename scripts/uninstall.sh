@@ -1,177 +1,211 @@
 #!/usr/bin/env bash
-# uninstall.sh — stop, disable, and remove API Manager systemd units.
-# Use --purge to also delete named volumes (irreversible).
+# uninstall.sh — stop API Manager and remove everything it created to build and run.
 #
-# With JOB=<slug> set, only that job's set is touched: services, containers,
-# pod, job images and leftover state are removed; volumes only with --purge
-# (no prompt) and Quadlet units only with --remove-quadlets. Then it checks for
-# leftovers with the job suffix and exits non-zero if any remain.
+# Default: stops the services and clears failed units, removes the containers
+# (incl. build and one-shot containers), the pod and its infra container, the
+# images the repo built plus their labelled build layers, the third-party base
+# images unless something else still uses them, any networks/secrets the repo
+# created, and leftover state files. Named volumes and Quadlet units are kept.
+#   --purge            also delete the named volumes (without JOB: type YES to confirm)
+#   --remove-quadlets  also delete the Quadlet units from ~/.config/containers/systemd
+# Finally it checks for leftovers, filtered to this install's exact names, and
+# exits non-zero if anything that should be gone is still there.
+#
+# Without JOB this acts on the main install; with JOB=<slug> only on that job's
+# suffixed set (and --purge does not prompt).
 set -euo pipefail
 # shellcheck source=scripts/common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 PURGE=false
 REMOVE_QUADLETS=false
-
 for arg in "$@"; do
   case "$arg" in
     --purge) PURGE=true ;;
     --remove-quadlets) REMOVE_QUADLETS=true ;;
     -h|--help)
       printf 'Usage: %s [--purge] [--remove-quadlets]\n' "$(basename "$0")"
+      printf 'Stops API Manager and removes its services, containers, pod, built images,\n'
+      printf 'build layers, unused base images and leftover state. Keeps volumes and\n'
+      printf 'Quadlet units unless asked:\n'
       printf '  --purge             Also delete the named volumes and their data\n'
-      printf '  --remove-quadlets   (JOB mode) also remove the job'"'"'s Quadlet units\n'
-      printf 'Without JOB, unit files are always removed (legacy behaviour).\n'
+      printf '                      (main install: asks you to type YES)\n'
+      printf '  --remove-quadlets   Also remove the Quadlet units and run daemon-reload\n'
+      printf 'Env: JOB=<slug> acts only on that job install (no prompt for --purge).\n'
+      printf 'Exits non-zero if leftovers remain after removal.\n'
       exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$arg" >&2; exit 1 ;;
   esac
 done
 
-if [ -n "$JOB" ]; then
-  step "Stopping job $JOB services"
-  mapfile -t services < <(all_services)
-  for s in "${services[@]}"; do
-    systemctl --user stop "$s" 2>/dev/null || true
-  done
+TARGET="${JOB:+job $JOB}"
+TARGET="${TARGET:-main install}"
 
-  step "Removing job containers, pod and images"
-  for c in "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV"; do
-    podman rm -f --ignore "$c" >/dev/null || true
-  done
-  podman pod rm -f --ignore "$POD_NAME" >/dev/null
-  for img in "$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV"; do
-    if podman image exists "$img"; then podman rmi -f "$img" >/dev/null && green "  removed image $img"; fi
-  done
-  podman image prune -f --filter "label=app=api-manager$SFX" >/dev/null || true
-  yellow "  Base images (${BASE_IMAGES[*]}) are shared with the main install; kept."
-
-  if [ "$PURGE" = "true" ]; then
-    step "Purging job volumes"
-    for v in "${VOLUMES[@]}"; do
-      for vol in "$v" "systemd-$v"; do
-        if podman volume exists "$vol"; then podman volume rm -f "$vol" >/dev/null && green "  removed volume $vol"; fi
-      done
-    done
-  else
-    yellow "  Volumes kept (use --purge to delete them)."
-  fi
-
-  units=()
-  for unit in "$QUADLET_DIR"/*; do units+=("$(unit_dest "$unit")"); done
-  if [ "$REMOVE_QUADLETS" = "true" ]; then
-    step "Removing job Quadlet units"
-    for u in "${units[@]}"; do
-      if [ -f "$u" ]; then rm -f "$u" && green "  removed $(basename "$u")"; fi
-    done
-    systemctl --user daemon-reload
-  else
-    yellow "  Quadlet units kept (use --remove-quadlets to delete them)."
-  fi
-  for s in "${services[@]}"; do
-    systemctl --user reset-failed "$s" 2>/dev/null || true
-  done
-
-  step "Checking for leftovers with suffix $SFX"
-  left=0
-  report() { if [ -n "$2" ]; then red "  $1: $2"; left=1; fi; }
-  only() { grep -Fx -f <(printf '%s\n' "$@") | tr '\n' ' ' || true; }
-  report containers "$(podman ps -a --format '{{.Names}}' | only "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV" "$POD_NAME-infra")"
-  report pods "$(podman pod ls --format '{{.Name}}' | only "$POD_NAME")"
-  report images "$(podman images --format '{{.Repository}}:{{.Tag}}' | only "$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV")"
-  report "labelled images" "$(podman images -q --filter "label=app=api-manager$SFX" | tr '\n' ' ')"
-  if [ "$PURGE" = "true" ]; then
-    vol_names=()
-    for v in "${VOLUMES[@]}"; do vol_names+=("$v" "systemd-$v"); done
-    report volumes "$(podman volume ls --format '{{.Name}}' | only "${vol_names[@]}")"
-  fi
-  if [ "$REMOVE_QUADLETS" = "true" ]; then
-    report units "$(for u in "${units[@]}"; do [ -e "$u" ] && basename "$u"; done | tr '\n' ' ' || true)"
-    report "systemd units" "$(systemctl --user list-units --all --plain --no-legend 'api-manager-*' | awk '{print $1}' | only "${services[@]}")"
-  fi
-  if [ "$left" -ne 0 ]; then red "Leftovers found for job $JOB."; exit 1; fi
-  green "Job $JOB uninstalled; nothing left."
-  exit 0
-fi
-
-# ── stop pod ──────────────────────────────────────────────────────────────────
-step "Stopping api-manager-pod"
-systemctl --user stop api-manager-pod-pod.service 2>/dev/null || true
-
-# ── stop individual services (belt + braces) ──────────────────────────────────
-for svc in api-manager-edge api-manager-frontend api-manager-backend api-manager-phpmyadmin api-manager-mariadb api-manager-dev; do
-  systemctl --user stop "${svc}.service" 2>/dev/null || true
-done
-
-# ── remove unit files ─────────────────────────────────────────────────────────
-step "Removing Quadlet unit files from $SYSTEMD_DIR"
-for pattern in \
-  api-manager-pod.pod \
-  api-manager-db.volume \
-  api-manager-tls.volume \
-  api-manager-jwt.volume \
-  api-manager-caddy-config.volume \
-  api-manager-caddy-data.volume \
-  api-manager-dev.volume \
-  api-manager-mariadb.container \
-  api-manager-backend.container \
-  api-manager-frontend.container \
-  api-manager-phpmyadmin.container \
-  api-manager-edge.container \
-  api-manager-dev.container \
-  api-manager.env; do
-  target="$SYSTEMD_DIR/$pattern"
-  if [ -f "$target" ]; then
-    rm -f "$target"
-    green "  removed $pattern"
-  fi
-done
-
-systemctl --user daemon-reload
-green "  daemon-reload done"
-green "  Quadlet install state is removed by deleting source unit files"
-
-# ── purge volumes ─────────────────────────────────────────────────────────────
-if [ "$PURGE" = "true" ]; then
-  step "Purging named volumes (--purge specified)"
-  yellow "WARNING: This will permanently delete all database data and TLS keys."
+# Confirm a main-install purge up front, before anything is removed.
+if [ "$PURGE" = "true" ] && [ -z "$JOB" ]; then
+  yellow "WARNING: --purge permanently deletes all database data, TLS and JWT keys."
   printf 'Type YES to confirm: '
-  read -r confirm
-  if [ "$confirm" = "YES" ]; then
-    base_volumes=(
-      api-manager-db
-      api-manager-tls
-      api-manager-jwt
-      api-manager-caddy-config
-      api-manager-caddy-data
-      api-manager-dev
-    )
-    candidate_volumes=()
-
-    for base_vol in "${base_volumes[@]}"; do
-      for vol in "$base_vol" "systemd-$base_vol"; do
-        if podman volume inspect "$vol" >/dev/null 2>&1; then
-          candidate_volumes+=("$vol")
-        fi
-      done
-    done
-
-    if [ "${#candidate_volumes[@]}" -eq 0 ]; then
-      yellow "  no api-manager volumes found, skipping"
-    else
-      for vol in "${candidate_volumes[@]}"; do
-        if podman volume rm --force "$vol" 2>/dev/null; then
-          green "  removed volume $vol"
-        else
-          red "  FAILED to remove volume $vol (still in use?)"
-        fi
-      done
-    fi
-  else
-    yellow "  Purge skipped (confirmation not given)"
+  confirm=""
+  read -r confirm || true
+  if [ "$confirm" != "YES" ]; then
+    yellow "  Purge not confirmed; volumes will be kept."
+    PURGE=false
   fi
 fi
 
-green ""
-green "API Manager uninstalled."
-if [ "$PURGE" != "true" ]; then
-  yellow "Named volumes retained. Re-run with --purge to delete data."
+mapfile -t services < <(all_services)
+mapfile -t containers < <(all_containers)
+repo_images=("$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV")
+# Volumes as Quadlet names them (systemd-<name>) and as install.sh creates them,
+# plus the dev volume older installs created.
+vol_names=()
+for v in "${VOLUMES[@]}" "api-manager-dev$SFX"; do vol_names+=("$v" "systemd-$v"); done
+# Quadlet units this install may have written (plus the stale dev volume unit).
+units=()
+for unit in "$QUADLET_DIR"/*; do units+=("$(unit_dest "$unit")"); done
+units+=("$SYSTEMD_DIR/api-manager-dev$SFX.volume")
+# Legacy host copy of the env file written by older installs.
+state_files=("$SYSTEMD_DIR/api-manager$SFX.env")
+
+# Print the lines of stdin that exactly match one of the arguments.
+only() { grep -Fx -f <(printf '%s\n' "$@") || true; }
+# Join stdin lines with spaces.
+words() { tr '\n' ' ' | sed 's/ *$//'; }
+# IDs of containers (incl. external build containers) from this repo's images.
+repo_container_ids() {
+  {
+    podman ps -a --external -q --filter "label=$IMAGE_LABEL"
+    for img in "${repo_images[@]}"; do
+      if podman image exists "$img"; then podman ps -a --external -q --filter "ancestor=$img"; fi
+    done
+  } | sort -u
+}
+
+# ── services ──────────────────────────────────────────────────────────────────
+step "Stopping $TARGET services"
+for s in "${services[@]}"; do
+  systemctl --user stop "$s" 2>/dev/null || true
+done
+
+# ── containers and pod ────────────────────────────────────────────────────────
+step "Removing $TARGET containers and pod"
+for c in "${containers[@]}"; do
+  if podman container exists "$c"; then podman rm -f "$c" >/dev/null && green "  removed container $c"; fi
+done
+mapfile -t extra < <(repo_container_ids)
+for id in "${extra[@]}"; do
+  if [ -n "$id" ] && podman rm -f "$id" >/dev/null 2>&1; then green "  removed container $id"; fi
+done
+if podman pod exists "$POD_NAME"; then podman pod rm -f "$POD_NAME" >/dev/null && green "  removed pod $POD_NAME"; fi
+
+# ── images ────────────────────────────────────────────────────────────────────
+step "Removing images built by the repo"
+for img in "${repo_images[@]}"; do
+  if podman image exists "$img"; then podman rmi -f "$img" >/dev/null && green "  removed image $img"; fi
+done
+# Intermediate and dangling layers: build.sh and dev.sh label every layer image.
+mapfile -t layers < <(podman images -a -q --filter "label=$IMAGE_LABEL" | sort -u)
+if [ "${#layers[@]}" -gt 0 ]; then
+  podman rmi -f "${layers[@]}" >/dev/null 2>&1 || true
+  green "  removed ${#layers[@]} labelled build layer image(s)"
 fi
+podman image prune -f --filter "label=$IMAGE_LABEL" >/dev/null 2>&1 || true
+green "  no RUN cache mounts are used, so there is no separate build cache to clear"
+
+step "Removing third-party base images not used elsewhere"
+for img in "${BASE_IMAGES[@]}"; do
+  podman image exists "$img" || continue
+  users="$(podman ps -a -q --filter "ancestor=$img" | words)"
+  if [ -n "$users" ]; then
+    yellow "  kept $img: used by container(s) $users"
+    continue
+  fi
+  # Other Quadlet units (other installs or repos) that still run this image.
+  refs="$(grep -lsFx "Image=$img" "$SYSTEMD_DIR"/*.container 2>/dev/null \
+    | grep -vFx -f <(printf '%s\n' "${units[@]}") | xargs -r -n1 basename | words || true)"
+  if [ -n "$refs" ]; then
+    yellow "  kept $img: referenced by other Quadlet unit(s) $refs"
+    continue
+  fi
+  if podman rmi "$img" >/dev/null 2>&1; then
+    green "  removed image $img"
+  else
+    yellow "  kept $img: still needed by another image"
+  fi
+done
+
+# ── networks, secrets, state files ────────────────────────────────────────────
+step "Removing networks, secrets and state files"
+for n in ${NETWORKS[@]+"${NETWORKS[@]}"}; do
+  if podman network exists "$n"; then podman network rm -f "$n" >/dev/null && green "  removed network $n"; fi
+done
+for s in ${SECRETS[@]+"${SECRETS[@]}"}; do
+  if podman secret exists "$s"; then podman secret rm "$s" >/dev/null && green "  removed secret $s"; fi
+done
+for f in "${state_files[@]}"; do
+  if [ -e "$f" ]; then rm -f "$f" && green "  removed $f"; fi
+done
+green "  the repo creates no networks or secrets; .env stays in the repo checkout"
+
+# ── volumes ───────────────────────────────────────────────────────────────────
+if [ "$PURGE" = "true" ]; then
+  step "Purging $TARGET volumes"
+  for vol in "${vol_names[@]}"; do
+    if podman volume exists "$vol"; then
+      if podman volume rm -f "$vol" >/dev/null; then green "  removed volume $vol"; else red "  FAILED to remove volume $vol"; fi
+    fi
+  done
+fi
+
+# ── Quadlet units ─────────────────────────────────────────────────────────────
+if [ "$REMOVE_QUADLETS" = "true" ]; then
+  step "Removing $TARGET Quadlet units from $SYSTEMD_DIR"
+  for u in "${units[@]}"; do
+    if [ -f "$u" ]; then rm -f "$u" && green "  removed $(basename "$u")"; fi
+  done
+  systemctl --user daemon-reload
+fi
+for s in "${services[@]}"; do
+  systemctl --user reset-failed "$s" 2>/dev/null || true
+done
+
+# ── leftover check ────────────────────────────────────────────────────────────
+step "Checking for $TARGET leftovers"
+left=0
+report() { if [ -n "$2" ]; then red "  $1: $2"; left=1; fi; }
+list_units() { systemctl --user list-units --all --plain --no-legend 'api-manager-*' 2>/dev/null || true; }
+report containers "$( { podman ps -a --external --format '{{.Names}}' | only "${containers[@]}"; repo_container_ids; } | words)"
+report pods "$(podman pod ls --format '{{.Name}}' | only "$POD_NAME" | words)"
+report images "$(podman images --format '{{.Repository}}:{{.Tag}}' | only "${repo_images[@]}" | words)"
+report "labelled images" "$(podman images -a -q --filter "label=$IMAGE_LABEL" | sort -u | words)"
+if [ "${#NETWORKS[@]}" -gt 0 ]; then
+  report networks "$(podman network ls --format '{{.Name}}' | only "${NETWORKS[@]}" | words)"
+fi
+if [ "${#SECRETS[@]}" -gt 0 ]; then
+  report secrets "$(podman secret ls --format '{{.Name}}' | only "${SECRETS[@]}" | words)"
+fi
+report "state files" "$(for f in "${state_files[@]}"; do if [ -e "$f" ]; then printf '%s\n' "$f"; fi; done | words)"
+report "running or failed services" "$(list_units | awk '$3 == "active" || $3 == "failed" {print $1}' | only "${services[@]}" | words)"
+
+present_vols="$(podman volume ls --format '{{.Name}}' | only "${vol_names[@]}" | words)"
+present_units="$(for u in "${units[@]}"; do if [ -e "$u" ]; then basename "$u"; fi; done | words)"
+if [ "$PURGE" = "true" ]; then
+  report volumes "$present_vols"
+elif [ -n "$present_vols" ]; then
+  yellow "  kept volumes (use --purge to delete): $present_vols"
+fi
+if [ "$REMOVE_QUADLETS" = "true" ]; then
+  report units "$present_units"
+  report "systemd units" "$(list_units | awk '{print $1}' | only "${services[@]}" | words)"
+elif [ -n "$present_units" ]; then
+  yellow "  kept Quadlet units (use --remove-quadlets to delete): $present_units"
+fi
+kept_base="$(podman images --format '{{.Repository}}:{{.Tag}}' | only "${BASE_IMAGES[@]}" | words)"
+if [ -n "$kept_base" ]; then yellow "  shared base images still present (see above): $kept_base"; fi
+
+if [ "$left" -ne 0 ]; then
+  red "Leftovers found for $TARGET."
+  exit 1
+fi
+green ""
+green "API Manager ($TARGET) uninstalled; nothing left that should be gone."

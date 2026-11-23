@@ -18,9 +18,9 @@ case "$TARGET" in
   *) printf 'Usage: %s [backend|frontend|both]\n' "$(basename "$0")" >&2; exit 1 ;;
 esac
 
-# Job builds keep no layer cache, so uninstall can remove every image they made.
-build_opts=(--label "app=api-manager$SFX")
-if [ -n "$JOB" ]; then build_opts+=(--layers=false); fi
+# The final image and every intermediate layer image carry the repo label, so
+# uninstall.sh can remove the build cache without touching other repos.
+build_opts=(--label "$IMAGE_LABEL" --layer-label "$IMAGE_LABEL")
 
 if [ "$TARGET" != "frontend" ]; then
   step "Building backend image ($IMAGE_BACKEND)"
