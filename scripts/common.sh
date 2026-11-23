@@ -14,12 +14,13 @@ ENV_FILE="$ROOT_DIR/.env"
 
 JOB="${JOB:-}"
 PORT_OFFSET="${PORT_OFFSET:-0}"
-case "$JOB" in
-  *[!a-z0-9-]*) printf 'JOB must be lowercase letters, digits and dashes: %s\n' "$JOB" >&2; exit 1 ;;
-esac
-case "$PORT_OFFSET" in
-  ''|*[!0-9]*) printf 'PORT_OFFSET must be a non-negative integer: %s\n' "$PORT_OFFSET" >&2; exit 1 ;;
-esac
+if [ -n "$JOB" ] && ! [[ "$JOB" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+  printf 'JOB must be lowercase letters and digits, joined by single dashes: %s\n' "$JOB" >&2; exit 1
+fi
+if ! [[ "$PORT_OFFSET" =~ ^[0-9]{1,5}$ ]]; then
+  printf 'PORT_OFFSET must be a non-negative integer: %s\n' "$PORT_OFFSET" >&2; exit 1
+fi
+PORT_OFFSET=$((10#$PORT_OFFSET))
 SFX="${JOB:+-$JOB}"
 
 # ── ports ─────────────────────────────────────────────────────────────────────
@@ -33,6 +34,9 @@ PMA_PORT_BASE=1102
 WEB_PORT=$((WEB_PORT_BASE + PORT_OFFSET))
 API_PORT=$((API_PORT_BASE + PORT_OFFSET))
 PMA_PORT=$((PMA_PORT_BASE + PORT_OFFSET))
+if [ "$PMA_PORT" -gt 65535 ]; then
+  printf 'PORT_OFFSET %s pushes ports past 65535\n' "$PORT_OFFSET" >&2; exit 1
+fi
 FRONTEND_INTERNAL_PORT=3000
 BACKEND_INTERNAL_PORT=3001
 
@@ -95,15 +99,21 @@ render_file() {
       expr+=(-e "s/\\b${name}\\b/${name}${SFX}/g")
     done
   fi
-  expr+=(
-    -e "s|__REPO_ENV__|$ENV_FILE|g"
-    -e "s/^PublishPort=${WEB_PORT_BASE}:${WEB_PORT_BASE}\$/PublishPort=${WEB_PORT}:${WEB_PORT}/"
-    -e "s/^PublishPort=${API_PORT_BASE}:${API_PORT_BASE}\$/PublishPort=${API_PORT}:${API_PORT}/"
-    -e "s/^PublishPort=${PMA_PORT_BASE}:${PMA_PORT_BASE}\$/PublishPort=${PMA_PORT}:${PMA_PORT}/"
-    -e "s/localhost:${WEB_PORT_BASE}\\b/localhost:${WEB_PORT}/g"
-    -e "s/localhost:${API_PORT_BASE}\\b/localhost:${API_PORT}/g"
-    -e "s/localhost:${PMA_PORT_BASE}\\b/localhost:${PMA_PORT}/g"
-  )
+  # Ports go through placeholders first so a shifted port is never matched
+  # again by the next rule (e.g. PORT_OFFSET=1 would turn 1100 into 1101).
+  local base port tag
+  expr+=(-e "s|__REPO_ENV__|$ENV_FILE|g")
+  for tag in WEB API PMA; do
+    base="${tag}_PORT_BASE"; base="${!base}"
+    expr+=(
+      -e "s/^PublishPort=${base}:${base}\$/PublishPort=@@${tag}@@:@@${tag}@@/"
+      -e "s/localhost:${base}\\b/localhost:@@${tag}@@/g"
+    )
+  done
+  for tag in WEB API PMA; do
+    port="${tag}_PORT"; port="${!port}"
+    expr+=(-e "s/@@${tag}@@/${port}/g")
+  done
   sed -i -E "${expr[@]}" "$file"
 }
 
@@ -115,3 +125,11 @@ unit_dest() {
 }
 
 svc() { printf 'api-manager-%s%s.service\n' "$1" "$SFX"; }
+
+# Every systemd service this install's units generate (exact names).
+all_services() {
+  local s v
+  for s in edge frontend backend phpmyadmin mariadb dev; do svc "$s"; done
+  printf '%s\n' "$POD_SERVICE"
+  for v in "${VOLUMES[@]}"; do printf '%s-volume.service\n' "$v"; done
+}

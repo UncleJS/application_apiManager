@@ -28,10 +28,10 @@ done
 
 if [ -n "$JOB" ]; then
   step "Stopping job $JOB services"
-  for s in edge frontend backend phpmyadmin mariadb dev; do
-    systemctl --user stop "$(svc "$s")" 2>/dev/null || true
+  mapfile -t services < <(all_services)
+  for s in "${services[@]}"; do
+    systemctl --user stop "$s" 2>/dev/null || true
   done
-  systemctl --user stop "$POD_SERVICE" 2>/dev/null || true
 
   step "Removing job containers, pod and images"
   for c in "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV"; do
@@ -66,21 +66,26 @@ if [ -n "$JOB" ]; then
   else
     yellow "  Quadlet units kept (use --remove-quadlets to delete them)."
   fi
-  systemctl --user reset-failed "api-manager-*$SFX*" 2>/dev/null || true
+  for s in "${services[@]}"; do
+    systemctl --user reset-failed "$s" 2>/dev/null || true
+  done
 
   step "Checking for leftovers with suffix $SFX"
   left=0
   report() { if [ -n "$2" ]; then red "  $1: $2"; left=1; fi; }
-  report containers "$(podman ps -a --format '{{.Names}}' | grep -E "^api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
-  report pods "$(podman pod ls --format '{{.Name}}' | grep -Fx "$POD_NAME" || true)"
-  report images "$(podman images --format '{{.Repository}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  only() { grep -Fx -f <(printf '%s\n' "$@") | tr '\n' ' ' || true; }
+  report containers "$(podman ps -a --format '{{.Names}}' | only "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV" "$POD_NAME-infra")"
+  report pods "$(podman pod ls --format '{{.Name}}' | only "$POD_NAME")"
+  report images "$(podman images --format '{{.Repository}}:{{.Tag}}' | only "$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV")"
+  report "labelled images" "$(podman images -q --filter "label=app=api-manager$SFX" | tr '\n' ' ')"
   if [ "$PURGE" = "true" ]; then
-    report volumes "$(podman volume ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+    vol_names=()
+    for v in "${VOLUMES[@]}"; do vol_names+=("$v" "systemd-$v"); done
+    report volumes "$(podman volume ls --format '{{.Name}}' | only "${vol_names[@]}")"
   fi
-  report networks "$(podman network ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
-  report secrets "$(podman secret ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
   if [ "$REMOVE_QUADLETS" = "true" ]; then
     report units "$(for u in "${units[@]}"; do [ -e "$u" ] && basename "$u"; done | tr '\n' ' ' || true)"
+    report "systemd units" "$(systemctl --user list-units --all --plain --no-legend 'api-manager-*' | awk '{print $1}' | only "${services[@]}")"
   fi
   if [ "$left" -ne 0 ]; then red "Leftovers found for job $JOB."; exit 1; fi
   green "Job $JOB uninstalled; nothing left."

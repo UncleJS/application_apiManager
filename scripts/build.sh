@@ -18,11 +18,15 @@ case "$TARGET" in
   *) printf 'Usage: %s [backend|frontend|both]\n' "$(basename "$0")" >&2; exit 1 ;;
 esac
 
+# Job builds keep no layer cache, so uninstall can remove every image they made.
+build_opts=(--label "app=api-manager$SFX")
+if [ -n "$JOB" ]; then build_opts+=(--layers=false); fi
+
 if [ "$TARGET" != "frontend" ]; then
   step "Building backend image ($IMAGE_BACKEND)"
-  podman build --label "app=api-manager$SFX" -f "$ROOT_DIR/backend/Containerfile" -t "$IMAGE_BACKEND" "$ROOT_DIR/backend"
+  podman build "${build_opts[@]}" -f "$ROOT_DIR/backend/Containerfile" -t "$IMAGE_BACKEND" "$ROOT_DIR/backend"
 fi
 if [ "$TARGET" != "backend" ]; then
   step "Building frontend image ($IMAGE_FRONTEND)"
-  podman build --label "app=api-manager$SFX" -f "$ROOT_DIR/frontend/Containerfile" -t "$IMAGE_FRONTEND" "$ROOT_DIR/frontend"
+  podman build "${build_opts[@]}" -f "$ROOT_DIR/frontend/Containerfile" -t "$IMAGE_FRONTEND" "$ROOT_DIR/frontend"
 fi

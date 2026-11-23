@@ -104,7 +104,7 @@ if len(sys.argv) > 2 and sys.argv[2] == 'true':
 
 # Keep local URLs on the ports this install publishes. Only empty values and
 # plain https://localhost:<port> values are rewritten; custom hosts are kept.
-local_url = re.compile(r'^https://localhost:[0-9]+$')
+local_url = re.compile(r'^https?://localhost:[0-9]+/?$')
 for key, port in (('CORS_ORIGIN', sys.argv[3]), ('NEXT_PUBLIC_API_URL', sys.argv[4])):
     current = get(key) or ''
     if current == '' or local_url.match(current):
@@ -130,6 +130,13 @@ fi
 
 if [ -z "$PYTHON_BIN" ]; then
   red "ERROR: python3 (or python) not found. Helper scripts require Python 3 on the host."
+  exit 1
+fi
+
+# A job install shares the repo-local .env with every unit it renders, so it must
+# not run from a checkout whose .env the main install already uses.
+if [ -n "$JOB" ] && grep -qsF "EnvironmentFile=$ENV_FILE" "$SYSTEMD_DIR/api-manager-backend.container"; then
+  red "ERROR: $ENV_FILE is used by the main install. Run JOB=$JOB from a separate worktree."
   exit 1
 fi
 
