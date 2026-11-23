@@ -50,10 +50,10 @@ This project includes:
 - `backend/`: Bun + Elysia + Drizzle ORM API/proxy
 - `frontend/`: Next.js 14 App Router admin UI
 - `.quadlet/`: Podman Quadlet pod/volume/container units (systemd user services)
-- `infra/`: DB reference SQL and Caddyfile template (reference only)
+- `infra/`: Caddyfile templates (seeded into the Caddy config volume by `install.sh`) and DB reference SQL
 - `scripts/`: install/build/start/stop/restart/rebuild/uninstall/dev/logs/seed helpers; shared names and ports live in `scripts/common.sh`
 - `docs/`: operations and plan guides
-- `Containerfile.dev`: UBI10-minimal dev container with Bun
+- `Containerfile.dev`: Bun dev container (`oven/bun:1.2.15`)
 
 [↑ Back to TOC](#table-of-contents)
 
@@ -92,7 +92,7 @@ Notes:
 [↑ Back to TOC](#table-of-contents)
 
 ## Scripts
-All lifecycle and helper scripts live in `scripts/` and only call `podman` and `systemctl --user`. Details, options and examples are in [scripts/README.md](scripts/README.md). Shared names and ports live in `scripts/common.sh`.
+All lifecycle and helper scripts live in `scripts/`. They drive `podman` and `systemctl --user`; `install.sh` and `dev.sh` also use host `python3` to normalise `.env`. Details, options and examples are in [scripts/README.md](scripts/README.md). Shared names and ports live in `scripts/common.sh`.
 
 | Script | Purpose |
 |--------|---------|
@@ -102,7 +102,7 @@ All lifecycle and helper scripts live in `scripts/` and only call `podman` and `
 | `scripts/stop.sh` | Stop the pod and services |
 | `scripts/restart.sh` | Stop, then start |
 | `scripts/rebuild.sh [backend\|frontend]` | Rebuild images and restart those services |
-| `scripts/uninstall.sh` | Remove services, containers, pod, repo-built images and build layers, unused base images and leftover state. Keeps volumes and Quadlet units unless `--purge` (asks you to type `YES` unless `JOB` is set) or `--remove-quadlets` is given. With both flags it checks for leftovers and exits non-zero if any remain. `JOB=<slug> PORT_OFFSET=<n>` targets a parallel job install |
+| `scripts/uninstall.sh` | Remove services, containers, pod, repo-built images and build layers, unused base images and leftover state. Keeps volumes and Quadlet units unless `--purge` (asks you to type `YES` unless `JOB` is set) or `--remove-quadlets` is given. It ends with a leftover check and exits non-zero if anything that should be gone remains; with both flags nothing from the install is left. `JOB=<slug> PORT_OFFSET=<n>` targets a parallel job install |
 | `scripts/dev.sh` | Build the dev container image and restart the dev unit |
 | `scripts/logs.sh [service]` | Follow service logs |
 | `scripts/seed.sh` | Run the one-shot seed |

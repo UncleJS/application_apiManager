@@ -4,17 +4,9 @@
 [![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](../.quadlet/)
 [![Shell: Bash](https://img.shields.io/badge/shell-Bash-4EAA25?logo=gnubash&logoColor=white)](common.sh)
 
-Bash scripts for managing the API Manager application lifecycle.
-All scripts must be run from the **repo root** (or any directory — they resolve paths relative to their own location).
-
-**Requirements (host OS):**
-- `podman` — container runtime
-- `python3` (or `python`) — used by `install.sh` and `dev.sh` to normalise `.env`
-- `systemd` user session with lingering enabled (`loginctl enable-linger $USER`)
-- `.env` at repo root — copy from `.env.example` and fill in values before first run
-
 ## Table of Contents
 
+- [Overview](#overview)
 - [Lifecycle scripts](#lifecycle-scripts)
   - [`install.sh`](#installsh)
   - [`build.sh`](#buildsh)
@@ -30,6 +22,21 @@ All scripts must be run from the **repo root** (or any directory — they resolv
   - [`seed.sh`](#seedsh)
 - [Environment variables](#environment-variables)
 - [Typical workflow](#typical-workflow)
+
+---
+
+## Overview
+
+Bash scripts for managing the API Manager application lifecycle.
+They work from any directory: each one changes to the repo root first.
+
+**Requirements (host OS):**
+- `podman` — container runtime
+- `python3` (or `python`) — used by `install.sh` and `dev.sh` to normalise `.env`
+- `systemd` user session (lingering via `loginctl enable-linger $USER` is optional, for boot persistence)
+- `.env` at repo root — copy from `.env.example` and fill in values before first run
+
+[↑ Back to TOC](#table-of-contents)
 
 ---
 
@@ -159,6 +166,32 @@ scripts/rebuild.sh frontend      # rebuild frontend only
 
 ### `uninstall.sh`
 
+Stops the install and removes everything it created to build and run. Without `JOB` it acts on the main install; with `JOB=<slug>` only on that job's suffixed set.
+
+**Removed by default:**
+1. Stops all services and clears failed units (`systemctl --user reset-failed`)
+2. Removes the containers (including one-shot and build containers from the repo images), the pod and its infra container
+3. Removes the images the repo built and their build layers (every layer carries the `app=api-manager[-<slug>]` label; unlabelled parents from older builds are removed too)
+4. Removes the third-party base images (`oven/bun`, `mariadb`, `caddy`, `phpmyadmin`, `busybox`) unless a container or another Quadlet unit still uses them; it says which ones it kept and why
+5. Removes networks, secrets and state files the scripts created (the repo creates no networks or secrets; `.env` stays in the checkout)
+6. Checks for leftovers filtered to this install's exact names and exits non-zero if anything that should be gone remains. It also points out leftover build containers and an enabled linger
+
+**Kept by default:** named volumes and the Quadlet units in `~/.config/containers/systemd/`, unless the flags below are given. The script lists what it kept.
+
+**Usage:**
+```bash
+scripts/uninstall.sh                                # keep volumes and units
+scripts/uninstall.sh --purge                        # also delete volumes (type YES; anything else aborts)
+scripts/uninstall.sh --remove-quadlets              # also remove Quadlet units + daemon-reload
+scripts/uninstall.sh --purge --remove-quadlets      # leave nothing behind
+JOB=<slug> PORT_OFFSET=<n> scripts/uninstall.sh --purge --remove-quadlets   # a job install, no prompt
+```
+
+| Flag | Effect |
+|------|--------|
+| `--purge` | Also delete the named volumes and their data. Without `JOB` you must type `YES` |
+| `--remove-quadlets` | Also remove the install's Quadlet units and run `daemon-reload` |
+| `-h`, `--help` | Show usage |
 
 **Volumes deleted by `--purge`** (both bare and `systemd-` prefixed variants):
 
@@ -169,7 +202,7 @@ scripts/rebuild.sh frontend      # rebuild frontend only
 | `api-manager-jwt`        | Unused legacy volume       |
 | `api-manager-caddy-config` | Caddy configuration      |
 | `api-manager-caddy-data` | Caddy ACME / data          |
-| `api-manager-dev`        | Dev container layer cache  |
+| `api-manager-dev`        | Legacy dev volume from older installs (no unit uses it now) |
 
 > **Warning:** `--purge` is irreversible. All database data will be lost.
 
@@ -211,11 +244,10 @@ Build the dev container image and restart the dev unit. Run this after any sourc
 
 **What it does:**
 1. Normalises `.env` (same logic as `install.sh`)
-2. Copies `api-manager.env` to `~/.config/containers/systemd/`
-3. Copies `.quadlet/api-manager-dev.container` to the systemd unit directory
-4. Runs `systemctl --user daemon-reload`
-5. Builds `api-manager-dev:latest` from `Containerfile.dev` (UBI10-minimal + Bun)
-6. Restarts `api-manager-dev.service`
+2. Copies `.quadlet/api-manager-dev.container` to the systemd unit directory
+3. Runs `systemctl --user daemon-reload`
+4. Builds `api-manager-dev:latest` from `Containerfile.dev` (`oven/bun:1.2.15`)
+5. Restarts `api-manager-dev.service`
 
 **Usage:**
 ```bash

@@ -114,9 +114,9 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 - Remove services, containers, pod, repo-built images and unused base images (keeps volumes and Quadlet units): `scripts/uninstall.sh`
 - Also delete volumes: `scripts/uninstall.sh --purge` (asks you to type `YES` unless `JOB` is set)
 - Also remove the Quadlet units: `scripts/uninstall.sh --remove-quadlets`
-- Leave nothing behind: `scripts/uninstall.sh --purge --remove-quadlets`; it checks for leftovers and exits non-zero if any remain.
+- Leave nothing behind: `scripts/uninstall.sh --purge --remove-quadlets`. Every run ends with a leftover check and exits non-zero if anything that should be gone remains.
 - Parallel job install: `JOB=<slug> PORT_OFFSET=<n> scripts/uninstall.sh` targets only that job's install.
-- After you type `YES`, purge deletes the named volumes `api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`, and `api-manager-dev`, including the `systemd-` prefixed copies when they exist.
+- Without `JOB`, `--purge` first asks you to type `YES`; any other answer aborts before anything is removed. Purge deletes the named volumes `api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`, and `api-manager-dev`, including the `systemd-` prefixed copies when they exist.
 
 [↑ Back to TOC](#table-of-contents)
 
