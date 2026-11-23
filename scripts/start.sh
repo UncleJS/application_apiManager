@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # start.sh — start all API Manager services via the pod unit
 set -euo pipefail
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-printf '\033[1;36m▶ Starting api-manager services...\033[0m\n'
-systemctl --user start api-manager-pod-pod.service
-systemctl --user start api-manager-mariadb.service api-manager-backend.service api-manager-frontend.service api-manager-edge.service
-if systemctl --user cat api-manager-phpmyadmin.service >/dev/null 2>&1; then
-  systemctl --user start api-manager-phpmyadmin.service
+case "${1:-}" in
+  -h|--help) printf 'Usage: %s\nEnv: JOB=<slug>, PORT_OFFSET=<n> select a job install.\n' "$(basename "$0")"; exit 0 ;;
+esac
+
+step "Starting api-manager$SFX services..."
+systemctl --user start "$POD_SERVICE"
+systemctl --user start "$(svc mariadb)" "$(svc backend)" "$(svc frontend)" "$(svc edge)"
+pma=false
+if systemctl --user cat "$(svc phpmyadmin)" >/dev/null 2>&1; then
+  systemctl --user start "$(svc phpmyadmin)"
+  pma=true
 fi
-printf '\033[0;32mStarted. Endpoints:\033[0m\n'
-printf '  Frontend:   https://localhost:55000\n'
-printf '  Backend:    https://localhost:55001\n'
-if systemctl --user cat api-manager-phpmyadmin.service >/dev/null 2>&1; then
-  printf '  phpMyAdmin: https://localhost:55002\n'
+green "Started. Endpoints:"
+printf '  Frontend:   https://localhost:%s\n' "$WEB_PORT"
+printf '  Backend:    https://localhost:%s\n' "$API_PORT"
+if [ "$pma" = "true" ]; then
+  printf '  phpMyAdmin: https://localhost:%s\n' "$PMA_PORT"
 fi
-printf '  API docs:   https://localhost:55001/docs when DOCS_ENABLED=true\n'
+printf '  API docs:   https://localhost:%s/docs when DOCS_ENABLED=true\n' "$API_PORT"

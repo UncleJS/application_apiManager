@@ -10,18 +10,24 @@
 #   scripts/logs.sh dev            # tail dev container only
 set -euo pipefail
 
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 SERVICE="${1:-}"
 
 case "$SERVICE" in
   backend|frontend|mariadb|edge|phpmyadmin|dev)
-    exec journalctl --user -u "api-manager-${SERVICE}.service" -f --no-hostname
+    exec journalctl --user -u "$(svc "$SERVICE")" -f --no-hostname
     ;;
   "")
     exec journalctl --user \
-      -u api-manager-backend.service \
-      -u api-manager-frontend.service \
-      -u api-manager-mariadb.service \
+      -u "$(svc backend)" \
+      -u "$(svc frontend)" \
+      -u "$(svc mariadb)" \
       -f --no-hostname
+    ;;
+  -h|--help)
+    printf 'Usage: %s [backend|frontend|mariadb|edge|phpmyadmin|dev]\n' "$0"
+    exit 0
     ;;
   *)
     printf 'Usage: %s [backend|frontend|mariadb|edge|phpmyadmin|dev]\n' "$0" >&2

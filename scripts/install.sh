@@ -5,21 +5,13 @@
 # and runs migrations.
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QUADLET_DIR="$ROOT_DIR/.quadlet"
-SYSTEMD_DIR="$HOME/.config/containers/systemd"
-ENV_FILE="$ROOT_DIR/.env"
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # Per project standard, Quadlet EnvironmentFile= references the repo-local .env
 # directly — no host-level copy under ~/.config/containers/systemd/.
 ENV_DEST="$ENV_FILE"
 CADDYFILE="$ROOT_DIR/infra/caddy/Caddyfile"
 PYTHON_BIN="$(command -v python3 || command -v python || true)"
-
-# ── colour helpers ────────────────────────────────────────────────────────────
-green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
-red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
-step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 # Linger keeps user services running after logout / across reboots. It changes
@@ -35,16 +27,17 @@ for arg in "$@"; do
       printf 'Usage: %s [--enable-linger|--no-linger] [--enable-phpmyadmin]\n' "$(basename "$0")"
       printf '  --enable-linger       Enable systemd linger (boot persistence) without prompting\n'
       printf '  --no-linger           Skip enabling linger\n'
-      printf '  --enable-phpmyadmin   Publish phpMyAdmin on https://localhost:55002\n'
+      printf '  --enable-phpmyadmin   Publish phpMyAdmin on https://localhost:%s\n' "$PMA_PORT"
+      printf 'Env: JOB=<slug> suffixes every name with -<slug>; PORT_OFFSET=<n> adds n to every published port.\n'
       exit 0 ;;
     *) red "Unknown argument: $arg"; exit 1 ;;
   esac
 done
 
 normalize_env_file() {
-  "$PYTHON_BIN" - "$1" "$2" <<'PY'
+  "$PYTHON_BIN" - "$1" "$2" "$WEB_PORT" "$API_PORT" <<'PY'
 from pathlib import Path
-import secrets, string, sys
+import re, secrets, string, sys
 
 path = Path(sys.argv[1])
 lines = path.read_text().splitlines()
@@ -108,6 +101,14 @@ if (get('SEED_DATA') or 'false').lower() == 'true' and (get('SEED_USER_PASSWORD'
 
 if len(sys.argv) > 2 and sys.argv[2] == 'true':
     setv('ENABLE_PHPMYADMIN', 'true')
+
+# Keep local URLs on the ports this install publishes. Only empty values and
+# plain https://localhost:<port> values are rewritten; custom hosts are kept.
+local_url = re.compile(r'^https://localhost:[0-9]+$')
+for key, port in (('CORS_ORIGIN', sys.argv[3]), ('NEXT_PUBLIC_API_URL', sys.argv[4])):
+    current = get(key) or ''
+    if current == '' or local_url.match(current):
+        setv(key, f'https://localhost:{port}')
 
 out = []
 for key, value in entries:
@@ -195,28 +196,30 @@ for unit in \
   "$QUADLET_DIR"/api-manager-backend.container \
   "$QUADLET_DIR"/api-manager-frontend.container \
   "$QUADLET_DIR"/api-manager-edge.container; do
-  dest="$SYSTEMD_DIR/$(basename "$unit")"
+  dest="$(unit_dest "$unit")"
   cp "$unit" "$dest"
-  # Resolve the __REPO_ENV__ placeholder to the absolute repo-local .env path
-  sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$dest"
-  green "  $(basename "$unit")"
+  # Job suffix, port offset, and the absolute repo-local .env path
+  render_file "$dest"
+  green "  $(basename "$dest")"
 done
 
 if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
-  cp "$QUADLET_DIR/api-manager-phpmyadmin.container" "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
-  sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
-  if ! grep -q 'PublishPort=55002:55002' "$SYSTEMD_DIR/api-manager-pod.pod"; then
-    printf '\nPublishPort=55002:55002\n' >> "$SYSTEMD_DIR/api-manager-pod.pod"
+  pma_dest="$(unit_dest "$QUADLET_DIR/api-manager-phpmyadmin.container")"
+  cp "$QUADLET_DIR/api-manager-phpmyadmin.container" "$pma_dest"
+  render_file "$pma_dest"
+  pod_dest="$(unit_dest "$QUADLET_DIR/api-manager-pod.pod")"
+  if ! grep -q "^PublishPort=${PMA_PORT}:${PMA_PORT}\$" "$pod_dest"; then
+    printf '\nPublishPort=%s:%s\n' "$PMA_PORT" "$PMA_PORT" >> "$pod_dest"
   fi
-  green "  api-manager-phpmyadmin.container (opt-in)"
+  green "  $(basename "$pma_dest") (opt-in)"
 else
-  rm -f "$SYSTEMD_DIR/api-manager-phpmyadmin.container"
+  rm -f "$(unit_dest "$QUADLET_DIR/api-manager-phpmyadmin.container")"
   green "  phpMyAdmin skipped (pass --enable-phpmyadmin or set ENABLE_PHPMYADMIN=true)"
 fi
 
 green "  Dev Quadlet is managed separately via scripts/dev.sh"
 
-for stale_unit in api-manager-dev.container api-manager-dev.volume; do
+for stale_unit in "api-manager-dev$SFX.container" "api-manager-dev$SFX.volume"; do
   target="$SYSTEMD_DIR/$stale_unit"
   if [ -f "$target" ]; then
     rm -f "$target"
@@ -229,33 +232,28 @@ step "Reloading systemd user daemon"
 systemctl --user daemon-reload
 
 # ── build images ─────────────────────────────────────────────────────────────
-step "Building backend image (api-manager-backend:latest)"
-podman build -f "$ROOT_DIR/backend/Containerfile" -t api-manager-backend:latest "$ROOT_DIR/backend"
-
-step "Building frontend image (api-manager-frontend:latest)"
-podman build -f "$ROOT_DIR/frontend/Containerfile" -t api-manager-frontend:latest "$ROOT_DIR/frontend"
+"$ROOT_DIR/scripts/build.sh"
 
 # ── create named volumes (idempotent) ─────────────────────────────────────────
 step "Creating named volumes"
-for vol in api-manager-db api-manager-tls api-manager-jwt api-manager-caddy-config api-manager-caddy-data; do
+for vol in "${VOLUMES[@]}"; do
   podman volume inspect "$vol" >/dev/null 2>&1 || podman volume create "$vol"
   green "  $vol"
 done
 
 # ── seed Caddyfile into named volume ──────────────────────────────────────────
-step "Writing Caddyfile into api-manager-caddy-config volume"
-caddy_input="$CADDYFILE"
+step "Writing Caddyfile into $CADDY_CONFIG_VOLUME volume"
+caddy_input="$(mktemp)"
+trap 'rm -f "$caddy_input"' EXIT
+cat "$CADDYFILE" > "$caddy_input"
 if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
-  caddy_input="$(mktemp)"
-  cat "$CADDYFILE" "$ROOT_DIR/infra/caddy/Caddyfile.phpmyadmin" > "$caddy_input"
+  cat "$ROOT_DIR/infra/caddy/Caddyfile.phpmyadmin" >> "$caddy_input"
 fi
+render_file "$caddy_input"
 podman run --rm -i \
-  -v systemd-api-manager-caddy-config:/etc/caddy:Z \
+  -v "$CADDY_CONFIG_VOLUME":/etc/caddy:Z \
   docker.io/library/busybox:latest \
   sh -lc 'cat > /etc/caddy/Caddyfile && echo "Caddyfile written"' < "$caddy_input"
-if [ "$caddy_input" != "$CADDYFILE" ]; then
-  rm -f "$caddy_input"
-fi
 
 # ── start services ────────────────────────────────────────────────────────────
 step "Starting runtime systemd user container services"
@@ -263,8 +261,8 @@ green "  Quadlet applies [Install] from source units during generation; generate
 green "  Dev Quadlet is not installed by scripts/install.sh; use scripts/dev.sh for local development"
 
 step "Starting generated api-manager pod unit and MariaDB"
-systemctl --user start api-manager-pod-pod.service
-systemctl --user start api-manager-mariadb.service
+systemctl --user start "$POD_SERVICE"
+systemctl --user start "$(svc mariadb)"
 
 # ── wait for MariaDB ──────────────────────────────────────────────────────────
 step "Waiting for MariaDB to be ready"
@@ -278,7 +276,7 @@ RETRIES="${DB_WAIT_RETRIES:-60}"
 DELAY_S=2
 db_ready=false
 for attempt in $(seq 1 "$RETRIES"); do
-  if podman exec api-manager-mariadb \
+  if podman exec "$CTR_MARIADB" \
        env MYSQL_PWD="$DB_ROOT_PASSWORD" mariadb-admin ping -h 127.0.0.1 -u root --silent 2>/dev/null; then
     db_ready=true
     break
@@ -295,13 +293,13 @@ green "  MariaDB ready"
 # ── run Drizzle migrations ────────────────────────────────────────────────────
 step "Running database migrations"
 podman run --rm \
-  --pod api-manager-pod \
+  --pod "$POD_NAME" \
   --env DB_HOST=127.0.0.1 \
   --env DB_PORT=3306 \
   --env HOST=0.0.0.0 \
-  --env PORT=3001 \
+  --env PORT="$BACKEND_INTERNAL_PORT" \
   --env-file "$ENV_DEST" \
-  localhost/api-manager-backend:latest \
+  "$IMAGE_BACKEND" \
   bun run db:migrate
 
 # ── optional seed ─────────────────────────────────────────────────────────────
@@ -311,42 +309,36 @@ SEED_ACCESS_LOGS="$(grep '^SEED_ACCESS_LOGS=' "$ENV_FILE" | cut -d= -f2- || echo
 if [ "$SEED_DATA" = "true" ] || [ "$SEED_ACCESS_LOGS" = "true" ]; then
   step "Seeding database"
   podman run --rm \
-    --pod api-manager-pod \
+    --pod "$POD_NAME" \
     --env DB_HOST=127.0.0.1 \
     --env DB_PORT=3306 \
     --env HOST=0.0.0.0 \
-    --env PORT=3001 \
+    --env PORT="$BACKEND_INTERNAL_PORT" \
     --env-file "$ENV_DEST" \
     -e SEED_DATA="$SEED_DATA" \
     -e SEED_ACCESS_LOGS="$SEED_ACCESS_LOGS" \
     -e ALLOW_SEED=true \
-    localhost/api-manager-backend:latest \
+    "$IMAGE_BACKEND" \
     bun run seed
 fi
 
 step "Starting backend, frontend, and edge services"
-systemctl --user start \
-  api-manager-backend.service \
-  api-manager-frontend.service \
-  api-manager-edge.service
+systemctl --user start "$(svc backend)" "$(svc frontend)" "$(svc edge)"
 if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
-  systemctl --user start api-manager-phpmyadmin.service
+  systemctl --user start "$(svc phpmyadmin)"
 fi
 
 # ── done ──────────────────────────────────────────────────────────────────────
 green ""
-green "╔══════════════════════════════════════════════╗"
-green "║  API Manager installed successfully          ║"
-green "╠══════════════════════════════════════════════╣"
-green "║  Frontend:   https://localhost:55000         ║"
-green "║  Backend:    https://localhost:55001         ║"
+green "API Manager installed successfully${JOB:+ (job $JOB)}"
+green "  Frontend:   https://localhost:${WEB_PORT}"
+green "  Backend:    https://localhost:${API_PORT}"
 if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
-  green "║  phpMyAdmin: https://localhost:55002         ║"
+  green "  phpMyAdmin: https://localhost:${PMA_PORT}"
 else
-  green "║  phpMyAdmin: disabled                      ║"
+  green "  phpMyAdmin: disabled"
 fi
-green "║  API docs:   set DOCS_ENABLED=true           ║"
-green "╚══════════════════════════════════════════════╝"
+green "  API docs:   set DOCS_ENABLED=true"
 green ""
 yellow "Note: TLS certs are self-signed. Accept the browser warning"
-yellow "for https://localhost:55001 before using the frontend."
+yellow "for https://localhost:${API_PORT} before using the frontend."

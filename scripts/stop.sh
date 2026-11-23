@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # stop.sh — stop all API Manager services
 set -euo pipefail
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-printf '\033[1;36m▶ Stopping api-manager services...\033[0m\n'
-systemctl --user stop api-manager-edge.service api-manager-phpmyadmin.service api-manager-frontend.service api-manager-backend.service api-manager-mariadb.service api-manager-dev.service || true
-systemctl --user stop api-manager-pod-pod.service || true
-printf '\033[0;32mStopped.\033[0m\n'
+case "${1:-}" in
+  -h|--help) printf 'Usage: %s\nEnv: JOB=<slug> selects a job install.\n' "$(basename "$0")"; exit 0 ;;
+esac
+
+step "Stopping api-manager$SFX services..."
+systemctl --user stop "$(svc edge)" "$(svc phpmyadmin)" "$(svc frontend)" "$(svc backend)" "$(svc mariadb)" "$(svc dev)" || true
+systemctl --user stop "$POD_SERVICE" || true
+green "Stopped."

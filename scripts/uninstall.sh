@@ -1,22 +1,91 @@
 #!/usr/bin/env bash
 # uninstall.sh — stop, disable, and remove API Manager systemd units.
 # Use --purge to also delete named volumes (irreversible).
+#
+# With JOB=<slug> set, only that job's set is touched: services, containers,
+# pod, job images and leftover state are removed; volumes only with --purge
+# (no prompt) and Quadlet units only with --remove-quadlets. Then it checks for
+# leftovers with the job suffix and exits non-zero if any remain.
 set -euo pipefail
-
-SYSTEMD_DIR="$HOME/.config/containers/systemd"
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 PURGE=false
+REMOVE_QUADLETS=false
 
 for arg in "$@"; do
   case "$arg" in
     --purge) PURGE=true ;;
+    --remove-quadlets) REMOVE_QUADLETS=true ;;
+    -h|--help)
+      printf 'Usage: %s [--purge] [--remove-quadlets]\n' "$(basename "$0")"
+      printf '  --purge             Also delete the named volumes and their data\n'
+      printf '  --remove-quadlets   (JOB mode) also remove the job'"'"'s Quadlet units\n'
+      printf 'Without JOB, unit files are always removed (legacy behaviour).\n'
+      exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$arg" >&2; exit 1 ;;
   esac
 done
 
-green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
-red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
-step()   { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
+if [ -n "$JOB" ]; then
+  step "Stopping job $JOB services"
+  for s in edge frontend backend phpmyadmin mariadb dev; do
+    systemctl --user stop "$(svc "$s")" 2>/dev/null || true
+  done
+  systemctl --user stop "$POD_SERVICE" 2>/dev/null || true
+
+  step "Removing job containers, pod and images"
+  for c in "$CTR_EDGE" "$CTR_FRONTEND" "$CTR_BACKEND" "$CTR_PHPMYADMIN" "$CTR_MARIADB" "$CTR_DEV"; do
+    podman rm -f --ignore "$c" >/dev/null || true
+  done
+  podman pod rm -f --ignore "$POD_NAME" >/dev/null
+  for img in "$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV"; do
+    if podman image exists "$img"; then podman rmi -f "$img" >/dev/null && green "  removed image $img"; fi
+  done
+  podman image prune -f --filter "label=app=api-manager$SFX" >/dev/null || true
+  yellow "  Base images (${BASE_IMAGES[*]}) are shared with the main install; kept."
+
+  if [ "$PURGE" = "true" ]; then
+    step "Purging job volumes"
+    for v in "${VOLUMES[@]}"; do
+      for vol in "$v" "systemd-$v"; do
+        if podman volume exists "$vol"; then podman volume rm -f "$vol" >/dev/null && green "  removed volume $vol"; fi
+      done
+    done
+  else
+    yellow "  Volumes kept (use --purge to delete them)."
+  fi
+
+  units=()
+  for unit in "$QUADLET_DIR"/*; do units+=("$(unit_dest "$unit")"); done
+  if [ "$REMOVE_QUADLETS" = "true" ]; then
+    step "Removing job Quadlet units"
+    for u in "${units[@]}"; do
+      if [ -f "$u" ]; then rm -f "$u" && green "  removed $(basename "$u")"; fi
+    done
+    systemctl --user daemon-reload
+  else
+    yellow "  Quadlet units kept (use --remove-quadlets to delete them)."
+  fi
+  systemctl --user reset-failed "api-manager-*$SFX*" 2>/dev/null || true
+
+  step "Checking for leftovers with suffix $SFX"
+  left=0
+  report() { if [ -n "$2" ]; then red "  $1: $2"; left=1; fi; }
+  report containers "$(podman ps -a --format '{{.Names}}' | grep -E "^api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  report pods "$(podman pod ls --format '{{.Name}}' | grep -Fx "$POD_NAME" || true)"
+  report images "$(podman images --format '{{.Repository}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  if [ "$PURGE" = "true" ]; then
+    report volumes "$(podman volume ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  fi
+  report networks "$(podman network ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  report secrets "$(podman secret ls --format '{{.Name}}' | grep -E "api-manager-.*${SFX}\$" | tr '\n' ' ' || true)"
+  if [ "$REMOVE_QUADLETS" = "true" ]; then
+    report units "$(for u in "${units[@]}"; do [ -e "$u" ] && basename "$u"; done | tr '\n' ' ' || true)"
+  fi
+  if [ "$left" -ne 0 ]; then red "Leftovers found for job $JOB."; exit 1; fi
+  green "Job $JOB uninstalled; nothing left."
+  exit 0
+fi
 
 # ── stop pod ──────────────────────────────────────────────────────────────────
 step "Stopping api-manager-pod"

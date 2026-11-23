@@ -3,16 +3,15 @@
 # Run this after any source code changes during development.
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_NAME="api-manager"
-SYSTEMD_DIR="$HOME/.config/containers/systemd"
-QUADLET_SRC="$ROOT_DIR/.quadlet/api-manager-dev.container"
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+case "${1:-}" in
+  -h|--help) printf 'Usage: %s\nBuilds the dev image and (re)starts the dev container in the pod.\n' "$(basename "$0")"; exit 0 ;;
+esac
+QUADLET_SRC="$QUADLET_DIR/api-manager-dev.container"
 # Quadlet EnvironmentFile= points at the repo-local .env directly (no host copy).
-ENV_FILE="$ROOT_DIR/.env"
 PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
-step() { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
-green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 
 normalize_env_file() {
   "$PYTHON_BIN" - "$1" <<'PY'
@@ -79,25 +78,28 @@ if [ -f "$ENV_FILE" ]; then
   normalize_env_file "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 fi
-cp "$QUADLET_SRC" "$SYSTEMD_DIR/api-manager-dev.container"
-sed -i "s|__REPO_ENV__|$ENV_FILE|g" "$SYSTEMD_DIR/api-manager-dev.container"
+dev_dest="$(unit_dest "$QUADLET_SRC")"
+cp "$QUADLET_SRC" "$dev_dest"
+render_file "$dev_dest"
 
-if [ ! -f "$SYSTEMD_DIR/api-manager-pod.pod" ]; then
-  cp "$ROOT_DIR/.quadlet/api-manager-pod.pod" "$SYSTEMD_DIR/api-manager-pod.pod"
+pod_dest="$(unit_dest "$QUADLET_DIR/api-manager-pod.pod")"
+if [ ! -f "$pod_dest" ]; then
+  cp "$QUADLET_DIR/api-manager-pod.pod" "$pod_dest"
+  render_file "$pod_dest"
 fi
 
 systemctl --user daemon-reload
 
-step "Building ${PROJECT_NAME}-dev:latest"
-podman build -f "$ROOT_DIR/Containerfile.dev" -t "${PROJECT_NAME}-dev:latest" "$ROOT_DIR"
+step "Building $IMAGE_DEV"
+podman build --label "app=api-manager$SFX" -f "$ROOT_DIR/Containerfile.dev" -t "$IMAGE_DEV" "$ROOT_DIR"
 
-step "Restarting ${PROJECT_NAME}-dev service"
-systemctl --user start api-manager-pod-pod.service >/dev/null 2>&1 || true
-systemctl --user restart "${PROJECT_NAME}-dev.service"
+step "Restarting $(svc dev)"
+systemctl --user start "$POD_SERVICE" >/dev/null 2>&1 || true
+systemctl --user restart "$(svc dev)"
 
 green ""
 green "Dev container rebuilt and restarted."
 green "Run commands inside it with:"
-green "  podman exec -it api-manager-dev sh               # shell"
-green "  podman exec -it api-manager-dev sh -lc 'cd /workspace/backend && bun run dev'"
-green "  podman exec -it api-manager-dev sh -lc 'cd /workspace/frontend && bun run dev'"
+green "  podman exec -it $CTR_DEV sh               # shell"
+green "  podman exec -it $CTR_DEV sh -lc 'cd /workspace/backend && bun run dev'"
+green "  podman exec -it $CTR_DEV sh -lc 'cd /workspace/frontend && bun run dev'"

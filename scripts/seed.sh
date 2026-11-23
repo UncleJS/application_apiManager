@@ -5,8 +5,11 @@
 #   SEED_DATA=true scripts/seed.sh     # force seed data
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env"
+# shellcheck source=scripts/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+case "${1:-}" in
+  -h|--help) printf 'Usage: [SEED_DATA=true] [SEED_ACCESS_LOGS=true] %s\n' "$(basename "$0")"; exit 0 ;;
+esac
 
 SEED_DATA="${SEED_DATA:-$(grep '^SEED_DATA=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo 'false')}"
 SEED_ACCESS_LOGS="${SEED_ACCESS_LOGS:-$(grep '^SEED_ACCESS_LOGS=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo 'false')}"
@@ -17,6 +20,6 @@ podman exec \
   -e SEED_DATA="$SEED_DATA" \
   -e SEED_ACCESS_LOGS="$SEED_ACCESS_LOGS" \
   -e ALLOW_SEED=true \
-  api-manager-backend bun run seed
+  "$CTR_BACKEND" bun run seed
 
 printf '\033[0;32mSeed complete.\033[0m\n'
