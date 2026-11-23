@@ -32,7 +32,7 @@ function resolveDbPassword(): string {
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   host: process.env.HOST ?? "0.0.0.0",
-  port: Number.parseInt(process.env.PORT ?? "55001", 10),
+  port: Number.parseInt(process.env.PORT ?? "1101", 10),
   db: {
     host: process.env.DB_HOST ?? "127.0.0.1",
     port: Number.parseInt(process.env.DB_PORT ?? "3306", 10),
@@ -40,7 +40,7 @@ export const config = {
     password: resolveDbPassword(),
     database: process.env.DB_DATABASE ?? "api_manager"
   },
-  corsOrigin: process.env.CORS_ORIGIN ?? "https://localhost:55000",
+  corsOrigin: process.env.CORS_ORIGIN ?? "https://localhost:1100",
   seedData: process.env.SEED_DATA === "true",
   seedAccessLogs: process.env.SEED_ACCESS_LOGS === "true",
   bootstrapAdmin: process.env.BOOTSTRAP_ADMIN !== "false",

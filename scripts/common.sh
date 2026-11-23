@@ -26,10 +26,10 @@ SFX="${JOB:+-$JOB}"
 # Registered range for this repo (00_repoMan). Layout: start+0 web, start+1 API,
 # start+2 phpMyAdmin. Caddy listens on the same port inside the pod as on the
 # host. Pod-internal: frontend 3000, backend 3001, MariaDB 3306 (never published).
-PORT_RANGE=55000-55002
-WEB_PORT_BASE=55000
-API_PORT_BASE=55001
-PMA_PORT_BASE=55002
+PORT_RANGE=1100-1109
+WEB_PORT_BASE=1100
+API_PORT_BASE=1101
+PMA_PORT_BASE=1102
 WEB_PORT=$((WEB_PORT_BASE + PORT_OFFSET))
 API_PORT=$((API_PORT_BASE + PORT_OFFSET))
 PMA_PORT=$((PMA_PORT_BASE + PORT_OFFSET))

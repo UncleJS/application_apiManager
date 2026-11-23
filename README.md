@@ -50,7 +50,7 @@ This project includes:
 - `frontend/`: Next.js 14 App Router admin UI
 - `.quadlet/`: Podman Quadlet pod/volume/container units (systemd user services)
 - `infra/`: DB reference SQL and Caddyfile template (reference only)
-- `scripts/`: install/start/stop/rebuild/uninstall/dev/logs/seed helpers
+- `scripts/`: install/build/start/stop/restart/rebuild/uninstall/dev/logs/seed helpers; shared names and ports live in `scripts/common.sh`
 - `docs/`: operations and plan guides
 - `Containerfile.dev`: UBI10-minimal dev container with Bun
 
@@ -76,13 +76,13 @@ scripts/install.sh
    For the separate dev container workflow, run `scripts/dev.sh`.
    
 3. Open:
-   - Frontend: `https://localhost:55000`
-   - Backend API: `https://localhost:55001` (Swagger at `/docs` when `DOCS_ENABLED=true`)
-   - phpMyAdmin: `https://localhost:55002` only after `scripts/install.sh --enable-phpmyadmin`
+   - Frontend: `https://localhost:1100`
+   - Backend API: `https://localhost:1101` (Swagger at `/docs` when `DOCS_ENABLED=true`)
+   - phpMyAdmin: `https://localhost:1102` only after `scripts/install.sh --enable-phpmyadmin`
 
 Notes:
 - Certificates are self-signed; browser warnings are expected.
-- Frontend requests use the same-origin `/api/*` proxy on `https://localhost:55000`; direct `55001` trust is only needed when you open backend docs or API routes yourself.
+- Frontend requests use the same-origin `/api/*` proxy on `https://localhost:1100`; direct `1101` trust is only needed when you open backend docs or API routes yourself.
 - After code changes, use `scripts/rebuild.sh` to rebuild images and restart.
 - `scripts/install.sh` does not install the dev Quadlet; use `scripts/dev.sh` for local development.
 - To stop: `scripts/stop.sh`
@@ -120,18 +120,21 @@ Set env in root `.env` (see `.env.example`).
 Important values:
 - `MARIADB_DATABASE`, `MARIADB_USER`, `MARIADB_PASSWORD`, `DB_ROOT_PASSWORD` — database credentials.
 - `BOOTSTRAP_ADMIN_PASSWORD` — required non-default bootstrap admin password; helper scripts now auto-generate one if the file still uses a placeholder.
-- `NEXT_PUBLIC_API_URL=https://localhost:55001`
-- `CORS_ORIGIN=https://localhost:55000`
+- `NEXT_PUBLIC_API_URL=https://localhost:1101`
+- `CORS_ORIGIN=https://localhost:1100`
 - `SESSION_IDLE_SECONDS`, `SESSION_HARD_MAX_SECONDS`
 - `SEED_DATA`, `SEED_ACCESS_LOGS`
 
 [Go to TOC](#table-of-contents)
 
 ## Ports
-- `55000` frontend (via Caddy HTTPS)
-- `55001` backend HTTPS (Elysia + Caddy)
-- `55002` phpMyAdmin (via Caddy HTTPS, opt-in)
-- MariaDB is internal-only in the pod
+Registered range: `1100-1109` (`PORT_RANGE` in `scripts/common.sh`).
+- `1100` frontend (via Caddy HTTPS)
+- `1101` backend HTTPS (Elysia + Caddy)
+- `1102` phpMyAdmin (via Caddy HTTPS, opt-in)
+- Frontend `3000`, backend `3001` and MariaDB `3306` are internal-only in the pod
+
+The ports moved from `55000`-`55002` to `1100`-`1102`. Update bookmarks, API clients, upstream callers and any `CORS_ORIGIN` / `NEXT_PUBLIC_API_URL` overrides that still use the old ports. A second copy can run beside the main install with `JOB=<slug> PORT_OFFSET=<n>` (see [scripts/README.md](scripts/README.md#shared-names-and-ports-commonsh)).
 
 [Go to TOC](#table-of-contents)
 

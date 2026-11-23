@@ -10,7 +10,7 @@
   }
 }
 
-https://localhost:55000 {
+https://localhost:1100 {
   import security_headers
   route {
     handle_path /api/* {
@@ -28,7 +28,7 @@ https://localhost:55000 {
   tls internal
 }
 
-https://localhost:55001 {
+https://localhost:1101 {
   import security_headers
   reverse_proxy 127.0.0.1:3001 {
     header_up Host {host}

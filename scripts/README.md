@@ -16,10 +16,13 @@ All scripts must be run from the **repo root** (or any directory — they resolv
 ## Table of Contents
 - [Lifecycle scripts](#lifecycle-scripts)
   - [install.sh](#installsh)
+  - [build.sh](#buildsh)
   - [start.sh](#startsh)
   - [stop.sh](#stopsh)
+  - [restart.sh](#restartsh)
   - [rebuild.sh](#rebuildsh)
   - [uninstall.sh](#uninstallsh)
+- [Shared names and ports (common.sh)](#shared-names-and-ports-commonsh)
 - [Development scripts](#development-scripts)
   - [dev.sh](#devsh)
   - [logs.sh](#logssh)
@@ -60,6 +63,19 @@ scripts/install.sh
 
 ---
 
+### `build.sh`
+
+Build or rebuild the backend and frontend images without restarting anything. `install.sh` and `rebuild.sh` call it.
+
+**Usage:**
+```bash
+scripts/build.sh               # both images
+scripts/build.sh backend       # api-manager-backend:latest only
+scripts/build.sh frontend      # api-manager-frontend:latest only
+```
+
+---
+
 ### `start.sh`
 
 Start all production services.
@@ -75,10 +91,10 @@ scripts/start.sh
 
 | Service    | URL                          |
 |------------|------------------------------|
-| Frontend   | https://localhost:55000      |
-| Backend    | https://localhost:55001      |
-| phpMyAdmin | https://localhost:55002 when enabled |
-| API Docs   | https://localhost:55001/docs when `DOCS_ENABLED=true` |
+| Frontend   | https://localhost:1100      |
+| Backend    | https://localhost:1101      |
+| phpMyAdmin | https://localhost:1102 when enabled |
+| API Docs   | https://localhost:1101/docs when `DOCS_ENABLED=true` |
 
 **No options or arguments.**
 
@@ -94,6 +110,17 @@ scripts/stop.sh
 ```
 
 **No options or arguments.**
+
+---
+
+### `restart.sh`
+
+Runs `stop.sh`, then `start.sh`.
+
+**Usage:**
+```bash
+scripts/restart.sh
+```
 
 ---
 
@@ -132,6 +159,9 @@ scripts/uninstall.sh --purge     # remove units AND delete named volumes (irreve
 |-----------|------------------------------------------------------------------------|
 | _(none)_  | Stops services, removes unit files from `~/.config/containers/systemd/`, runs `daemon-reload` |
 | `--purge` | Additionally prompts for interactive confirmation (`YES`), then deletes all named volumes |
+| `--remove-quadlets` | Job mode only (see below): also removes the job's units. Without `JOB`, units are always removed |
+
+With `JOB=<slug>` set, `uninstall.sh` touches only that job's set: it stops the job services, removes the job containers, pod and images, deletes the job volumes with `--purge` (no prompt) and the job units with `--remove-quadlets`, then lists any leftovers with the `-<slug>` suffix and exits non-zero if some remain. Shared base images (MariaDB, Caddy, phpMyAdmin, BusyBox) are kept because the main install uses them.
 
 **Volumes deleted by `--purge`** (both bare and `systemd-` prefixed variants):
 
@@ -145,6 +175,32 @@ scripts/uninstall.sh --purge     # remove units AND delete named volumes (irreve
 | `api-manager-dev`        | Dev container layer cache  |
 
 > **Warning:** `--purge` is irreversible. All database data will be lost.
+
+[Go to TOC](#table-of-contents)
+
+---
+
+## Shared names and ports (common.sh)
+
+`scripts/common.sh` is sourced by every script. It holds the pod, container, image, volume and unit names and the published ports:
+
+| Variable | Default | Use |
+|----------|---------|-----|
+| `PORT_RANGE` | `1100-1109` | Port range registered for this repo |
+| `WEB_PORT` | `1100` | Frontend via Caddy HTTPS (range start + 0) |
+| `API_PORT` | `1101` | Backend via Caddy HTTPS (range start + 1) |
+| `PMA_PORT` | `1102` | phpMyAdmin via Caddy HTTPS, opt-in (range start + 2) |
+
+The frontend (`3000`), backend (`3001`) and MariaDB (`3306`) ports stay inside the pod and are never published.
+
+**Parallel installs.** Set `JOB=<slug>` to suffix every name with `-<slug>`, and `PORT_OFFSET=<n>` to add `n` to every published port. The suffix and offset are applied when the units and the Caddyfile are copied to `~/.config/containers/systemd/`; the repo files stay the source. Example:
+
+```bash
+JOB=test PORT_OFFSET=3000 scripts/install.sh --no-linger   # https://localhost:4100
+JOB=test PORT_OFFSET=3000 scripts/uninstall.sh --purge --remove-quadlets
+```
+
+`install.sh` also points `CORS_ORIGIN` and `NEXT_PUBLIC_API_URL` at the published ports when they are empty or plain `https://localhost:<port>` values. Custom hosts are left alone.
 
 [Go to TOC](#table-of-contents)
 
@@ -252,8 +308,8 @@ Script-relevant variables from `.env` (full list in `.env.example`):
 | `SEED_USER_PASSWORD`      | `change_this_for_seeded_users`               | install.sh, seed.sh | Password for seeded users — auto-generated if left as placeholder |
 | `SEED_DATA`               | `false`                                      | install.sh, seed.sh | Seed sample data on startup / seed run                         |
 | `SEED_ACCESS_LOGS`        | `false`                                      | seed.sh           | Seed sample access-log entries                                  |
-| `NEXT_PUBLIC_API_URL`     | `https://localhost:55001`                    | install.sh, dev.sh | Frontend → backend API URL (aliased from `VITE_API_BASE_URL`)  |
-| `CORS_ORIGIN`             | `https://localhost:55000`                    | install.sh        | Allowed CORS origin for the backend                             |
+| `NEXT_PUBLIC_API_URL`     | `https://localhost:1101`                    | install.sh, dev.sh | Frontend → backend API URL (aliased from `VITE_API_BASE_URL`)  |
+| `CORS_ORIGIN`             | `https://localhost:1100`                    | install.sh        | Allowed CORS origin for the backend                             |
 
 [Go to TOC](#table-of-contents)
 

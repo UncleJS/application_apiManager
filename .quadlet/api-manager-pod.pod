@@ -1,4 +1,4 @@
 [Pod]
 PodName=api-manager-pod
-PublishPort=55000:55000
-PublishPort=55001:55001
+PublishPort=1100:1100
+PublishPort=1101:1101

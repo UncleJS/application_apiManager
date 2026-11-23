@@ -25,16 +25,16 @@
 2. Run `scripts/install.sh`.
 3. After code changes, use `scripts/rebuild.sh`.
 4. Open the UI:
-   - Frontend: `https://localhost:55000`
-   - Backend (API + proxy): `https://localhost:55001`
-   - phpMyAdmin (only when enabled): `https://localhost:55002`
+   - Frontend: `https://localhost:1100`
+   - Backend (API + proxy): `https://localhost:1101`
+   - phpMyAdmin (only when enabled): `https://localhost:1102`
 
 Notes:
 - Host helper scripts require Python 3 (`python3` or `python`) for env normalization.
 - `scripts/install.sh` installs only the runtime Quadlets; build/start the separate dev container with `scripts/dev.sh`.
 - Public endpoints are served over HTTPS with a Caddy internal certificate; your browser will show a warning.
-- The frontend uses the same-origin `https://localhost:55000/api/*` proxy for browser API calls. Visit `https://localhost:55001` only when you need direct backend access.
-- `https://localhost:55001/healthz` is liveness. `https://localhost:55001/readyz` is readiness (database up). Swagger at `/docs` is served only when `DOCS_ENABLED=true`.
+- The frontend uses the same-origin `https://localhost:1100/api/*` proxy for browser API calls. Visit `https://localhost:1101` only when you need direct backend access.
+- `https://localhost:1101/healthz` is liveness. `https://localhost:1101/readyz` is readiness (database up). Swagger at `/docs` is served only when `DOCS_ENABLED=true`.
 - MariaDB has no host port; it is only reachable inside the pod.
 
 [Go to TOC](#table-of-contents)
@@ -89,7 +89,7 @@ Enable access log seed generation (250k rows for 2025-01-01 to 2026-02-03):
 
 ## phpMyAdmin login
 - Off by default. Enable with `ENABLE_PHPMYADMIN=true` in `.env` or `scripts/install.sh --enable-phpmyadmin`. The CLI flag is written back into `.env` so a later install keeps phpMyAdmin.
-- URL when enabled: `https://localhost:55002`
+- URL when enabled: `https://localhost:1102`
 - Login is required (no auto-login).
 - Use the MariaDB credentials from `.env` (`MARIADB_USER` / `MARIADB_PASSWORD`).
 
@@ -128,7 +128,7 @@ Backend:
 - `BOOTSTRAP_ADMIN_PASSWORD` (must be non-default when bootstrap admin is enabled)
 - `SEED_DATA` (default `false`)
 - `SEED_ACCESS_LOGS` (default `false`)
-- `CORS_ORIGIN` (default `https://localhost:55000`)
+- `CORS_ORIGIN` (default `https://localhost:1100`)
 - `DB_WAIT_RETRIES` (default `60`)
 - `DB_WAIT_DELAY_MS` (default `2000`)
 - `SESSION_IDLE_SECONDS` (default `3600`)
@@ -141,14 +141,15 @@ Setup script:
 - `DB_HOST` (default `127.0.0.1`)
 
 Frontend:
-- `NEXT_PUBLIC_API_URL` (the deployed frontend image calls `/api` through Caddy; set this only for local frontend dev, for example `https://localhost:55001`)
+- `NEXT_PUBLIC_API_URL` (the deployed frontend image calls `/api` through Caddy; set this only for local frontend dev, for example `https://localhost:1101`)
 
 [Go to TOC](#table-of-contents)
 
 ## Ports
-- Frontend: `55000`
-- Backend HTTPS: `55001`
-- phpMyAdmin: `55002` (only when enabled)
+Registered range `1100-1109`; the numbers live in `scripts/common.sh`. They were `55000`-`55002` before.
+- Frontend: `1100`
+- Backend HTTPS: `1101`
+- phpMyAdmin: `1102` (only when enabled)
 - MariaDB: internal only
 
 [Go to TOC](#table-of-contents)
@@ -169,18 +170,18 @@ API client login flow:
 Example 1 (simple passthrough):
 - `base_path`: `/acme/orders`
 - `target_url`: `https://example.com/acme/orders`
-- Request: `https://localhost:55001/acme/orders/123?status=open`
+- Request: `https://localhost:1101/acme/orders/123?status=open`
 - Upstream: `https://example.com/acme/orders/123?status=open`
 
 Example 2 (different upstream root):
 - `base_path`: `/globex/billing`
 - `target_url`: `https://api.globex.com/v2`
-- Request: `https://localhost:55001/globex/billing/invoices/55`
+- Request: `https://localhost:1101/globex/billing/invoices/55`
 - Upstream: `https://api.globex.com/v2/invoices/55`
 
 Example 3 (public API, no auth):
 ```bash
-curl -k https://localhost:55001/global/public/ping
+curl -k https://localhost:1101/global/public/ping
 ```
 
 Example 4 (restricted API):

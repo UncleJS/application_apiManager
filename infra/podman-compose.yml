@@ -39,7 +39,7 @@ services:
     pod: api-manager-pod
     container_name: api-manager-backend
     environment:
-      PORT: 55001
+      PORT: 1101
       HOST: 0.0.0.0
       DB_HOST: mariadb
       DB_PORT: 3306
@@ -62,12 +62,12 @@ services:
     depends_on:
       - mariadb
     ports:
-      - "55001:55001"
+      - "1101:1101"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"require('https').get('https://127.0.0.1:55001/healthz',{rejectUnauthorized:false},res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+          "node -e \"require('https').get('https://127.0.0.1:1101/healthz',{rejectUnauthorized:false},res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
         ]
       interval: 10s
       timeout: 5s
@@ -81,7 +81,7 @@ services:
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:55000',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:1100',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
       ]
       interval: 10s
       timeout: 5s
@@ -107,8 +107,8 @@ services:
     pod: api-manager-pod
     container_name: api-manager-edge
     ports:
-      - "55000:55000"
-      - "55002:55002"
+      - "1100:1100"
+      - "1102:1102"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
       - api-manager-caddy-data:/data

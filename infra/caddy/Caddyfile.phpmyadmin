@@ -1,4 +1,4 @@
-https://localhost:55002 {
+https://localhost:1102 {
   import security_headers
   reverse_proxy 127.0.0.1:80
   tls internal
