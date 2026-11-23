@@ -1,5 +1,5 @@
 # Stage 1 — build (Bun)
-FROM oven/bun:1-alpine AS builder
+FROM docker.io/oven/bun:1-alpine AS builder
 
 WORKDIR /app
 COPY package.json bun.lock ./
@@ -10,7 +10,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
 # Stage 2 — runtime (Next.js standalone on Bun)
-FROM oven/bun:1-alpine AS runner
+FROM docker.io/oven/bun:1-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production

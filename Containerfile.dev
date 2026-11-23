@@ -1,6 +1,6 @@
 # Dev container for API Manager
 # Base: official Bun image with Node/npm already available
-FROM oven/bun:1.2.15
+FROM docker.io/oven/bun:1.2.15
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
