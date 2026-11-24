@@ -4,8 +4,8 @@
 [![Bun](https://img.shields.io/badge/Bun-runtime-000000?logo=bun&logoColor=white)](backend/package.json)
 [![Elysia](https://img.shields.io/badge/Elysia-backend-f472b6)](backend/package.json)
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)](frontend/package.json)
-[![MariaDB](https://img.shields.io/badge/MariaDB-11.4-003545?logo=mariadb&logoColor=white)](.quadlet/api-manager-mariadb.container)
-[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](.quadlet/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-11.4-003545?logo=mariadb&logoColor=white)](quadlet/api-manager-mariadb.container)
+[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](quadlet/)
 
 API gateway and admin console for managing proxied APIs with org-level access control, session auth, and usage reporting.
 
@@ -29,7 +29,7 @@ API gateway and admin console for managing proxied APIs with org-level access co
 This project includes:
 - A backend reverse proxy and admin API (`backend/`) built with **Bun + Elysia + Drizzle ORM** (TypeScript).
 - A **Next.js 14 App Router** admin UI (`frontend/`) with Tailwind high-contrast dark theme for orgs, users, APIs, permissions, windows, reports, and active sessions.
-- Rootless **Podman + systemd Quadlet** infrastructure (`.quadlet/`) with MariaDB, backend, frontend, optional phpMyAdmin, and Caddy for HTTPS edge serving.
+- Rootless **Podman + systemd Quadlet** infrastructure (`quadlet/`) with MariaDB, backend, frontend, optional phpMyAdmin, and Caddy for HTTPS edge serving.
 - Caddy owns the public HTTPS ports; the backend runs on an internal-only HTTP port inside the pod.
 - OpenAPI spec at `/openapi.json` and Swagger UI at `/docs` when `DOCS_ENABLED=true`.
 
@@ -49,7 +49,7 @@ This project includes:
 ## Repository Structure
 - `backend/`: Bun + Elysia + Drizzle ORM API/proxy
 - `frontend/`: Next.js 14 App Router admin UI
-- `.quadlet/`: Podman Quadlet pod/volume/container units (systemd user services)
+- `quadlet/`: Podman Quadlet pod/volume/container units (systemd user services)
 - `infra/`: Caddyfile templates (seeded into the Caddy config volume by `install.sh`) and DB reference SQL
 - `scripts/`: install/build/start/stop/restart/rebuild/uninstall/dev/logs/seed helpers; shared names and ports live in `scripts/common.sh`
 - `docs/`: operations and plan guides
@@ -151,7 +151,7 @@ Important values:
 Registered range: `1100-1109` (`PORT_RANGE` in `scripts/common.sh`).
 - `1100` frontend (via Caddy HTTPS)
 - `1101` backend HTTPS (Elysia + Caddy)
-- `1102` phpMyAdmin (via Caddy HTTPS, opt-in)
+- `1102` phpMyAdmin (via Caddy HTTPS, opt-in; the pod unit carries `PublishPort=1102:1102` commented out and `install.sh --enable-phpmyadmin` enables it)
 - Pod-internal only (never published): frontend 3000, backend 3001, MariaDB 3306
 
 If you moved from an older install, update bookmarks, API clients, upstream callers and any `CORS_ORIGIN` / `NEXT_PUBLIC_API_URL` overrides to the ports above. A second copy can run beside the main install with `JOB=<slug> PORT_OFFSET=<n>` (every published port becomes its base port + `PORT_OFFSET`) (see [scripts/README.md](scripts/README.md#shared-names-and-ports-commonsh)).

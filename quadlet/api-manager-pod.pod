@@ -1,0 +1,8 @@
+[Pod]
+PodName=api-manager-pod
+PublishPort=1100:1100
+PublishPort=1101:1101
+
+# phpMyAdmin is off by default. scripts/install.sh --enable-phpmyadmin (or
+# ENABLE_PHPMYADMIN=true in .env) uncomments this line when it installs the pod.
+#PublishPort=1102:1102

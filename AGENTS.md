@@ -6,9 +6,9 @@ If guidance here conflicts with existing project conventions, follow the project
 ## Repository status
 - **Backend**: Bun + Elysia + Drizzle ORM (TypeScript) in `backend/`.
 - **Frontend**: Next.js 14 App Router + Tailwind + shadcn-compatible dark UI in `frontend/`.
-- **Infra**: Rootless Podman + systemd Quadlet units in `.quadlet/`; `infra/` kept for DB reference SQL and Caddyfile template.
+- **Infra**: Rootless Podman + systemd Quadlet units in `quadlet/`; `infra/` kept for DB reference SQL and Caddyfile template.
 - **Scripts**: `install.sh`, `uninstall.sh`, `start.sh`, `stop.sh`, `rebuild.sh`, `dev.sh`, `logs.sh`, `seed.sh` in `scripts/`.
-- **Dev container**: `Containerfile.dev` (`oven/bun`) + `.quadlet/api-manager-dev.container`.
+- **Dev container**: `Containerfile.dev` (`oven/bun`) + `quadlet/api-manager-dev.container`.
 - Frontend is served over HTTPS via Caddy. phpMyAdmin is opt-in (`ENABLE_PHPMYADMIN=true` or `scripts/install.sh --enable-phpmyadmin`).
 - Auth uses DB-backed sessions with cookie `api_manager_session`.
 - OpenAPI spec at `/openapi.json` and Swagger UI at `/docs` only when `DOCS_ENABLED=true`.
@@ -49,7 +49,7 @@ If guidance here conflicts with existing project conventions, follow the project
 - Tests: `bun test` from `backend/` and from `frontend/` (`BOOTSTRAP_ADMIN=false` is set by the backend `npm test` / `bun test` script).
 
 ### Health checks
-- Healthchecks are configured in Quadlet container units (`.quadlet/*.container`) for DB, backend, and frontend.
+- Healthchecks are configured in Quadlet container units (`quadlet/*.container`) for DB, backend, and frontend.
 
 ### Reports
 - Report endpoints accept optional `from` and `to` query params (ISO date or datetime).

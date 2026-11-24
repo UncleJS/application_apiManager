@@ -1,4 +1,0 @@
-[Pod]
-PodName=api-manager-pod
-PublishPort=1100:1100
-PublishPort=1101:1101

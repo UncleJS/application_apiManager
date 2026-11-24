@@ -205,6 +205,10 @@ for unit in \
   "$QUADLET_DIR"/api-manager-edge.container; do
   dest="$(unit_dest "$unit")"
   cp "$unit" "$dest"
+  # Opt-in phpMyAdmin port: the pod unit carries it commented out
+  if [ "$ENABLE_PHPMYADMIN" = "true" ] && [ "$unit" = "$QUADLET_DIR/api-manager-pod.pod" ]; then
+    sed -i "s/^#PublishPort=${PMA_PORT_BASE}:${PMA_PORT_BASE}\$/PublishPort=${PMA_PORT_BASE}:${PMA_PORT_BASE}/" "$dest"
+  fi
   # Job suffix, port offset, and the absolute repo-local .env path
   render_file "$dest"
   green "  $(basename "$dest")"
@@ -214,10 +218,6 @@ if [ "$ENABLE_PHPMYADMIN" = "true" ]; then
   pma_dest="$(unit_dest "$QUADLET_DIR/api-manager-phpmyadmin.container")"
   cp "$QUADLET_DIR/api-manager-phpmyadmin.container" "$pma_dest"
   render_file "$pma_dest"
-  pod_dest="$(unit_dest "$QUADLET_DIR/api-manager-pod.pod")"
-  if ! grep -q "^PublishPort=${PMA_PORT}:${PMA_PORT}\$" "$pod_dest"; then
-    printf '\nPublishPort=%s:%s\n' "$PMA_PORT" "$PMA_PORT" >> "$pod_dest"
-  fi
   green "  $(basename "$pma_dest") (opt-in)"
 else
   rm -f "$(unit_dest "$QUADLET_DIR/api-manager-phpmyadmin.container")"

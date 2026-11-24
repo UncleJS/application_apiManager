@@ -9,7 +9,7 @@
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR" || exit 1
-QUADLET_DIR="$ROOT_DIR/.quadlet"
+QUADLET_DIR="$ROOT_DIR/quadlet"
 SYSTEMD_DIR="$HOME/.config/containers/systemd"
 ENV_FILE="$ROOT_DIR/.env"
 
@@ -42,7 +42,7 @@ FRONTEND_INTERNAL_PORT=3000
 BACKEND_INTERNAL_PORT=3001
 
 # ── names ─────────────────────────────────────────────────────────────────────
-# Base names as they appear in .quadlet/ and the image tags; each gets $SFX.
+# Base names as they appear in quadlet/ and the image tags; each gets $SFX.
 BASE_NAMES=(
   api-manager-pod
   api-manager-mariadb
@@ -68,7 +68,7 @@ CTR_DEV="api-manager-dev$SFX"
 IMAGE_BACKEND="localhost/api-manager-backend$SFX:latest"
 IMAGE_FRONTEND="localhost/api-manager-frontend$SFX:latest"
 IMAGE_DEV="localhost/api-manager-dev$SFX:latest"
-# Volumes as named in .quadlet/ (Quadlet creates them as systemd-<name>).
+# Volumes as named in quadlet/ (Quadlet creates them as systemd-<name>).
 VOLUMES=(
   "api-manager-db$SFX"
   "api-manager-tls$SFX"
@@ -132,7 +132,7 @@ render_file() {
   sed -i -E "${expr[@]}" "$file"
 }
 
-# Destination path in $SYSTEMD_DIR for a unit from .quadlet/ (suffixed name).
+# Destination path in $SYSTEMD_DIR for a unit from quadlet/ (suffixed name).
 unit_dest() {
   local base
   base="$(basename "$1")"

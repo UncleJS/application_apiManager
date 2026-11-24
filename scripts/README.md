@@ -1,7 +1,7 @@
 # Scripts
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-lightgrey.svg)](../LICENSE.md)
-[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](../.quadlet/)
+[![Podman Quadlet](https://img.shields.io/badge/Podman-Quadlet-892CA0?logo=podman&logoColor=white)](../quadlet/)
 [![Shell: Bash](https://img.shields.io/badge/shell-Bash-4EAA25?logo=gnubash&logoColor=white)](common.sh)
 
 ## Table of Contents
@@ -52,7 +52,7 @@ First-time setup. Idempotent — safe to re-run.
 1. Checks prerequisites (`podman`, `python3`, `.env`)
 2. Asks about systemd user linger, or honours `--enable-linger` / `--no-linger`
 3. Normalises `.env` — patches missing aliases (`DB_*` ← `MARIADB_*`, `NEXT_PUBLIC_API_URL` ← `VITE_API_BASE_URL`) and auto-generates strong passwords for `BOOTSTRAP_ADMIN_PASSWORD` and `SEED_USER_PASSWORD` if they are still set to placeholder values
-4. Copies Quadlet units from `.quadlet/` → `~/.config/containers/systemd/` and rewrites the `EnvironmentFile=` path. phpMyAdmin is included only with `--enable-phpmyadmin` or `ENABLE_PHPMYADMIN=true`
+4. Copies Quadlet units from `quadlet/` → `~/.config/containers/systemd/` and rewrites the `EnvironmentFile=` path. phpMyAdmin is included only with `--enable-phpmyadmin` or `ENABLE_PHPMYADMIN=true` (then the commented `PublishPort=1102:1102` in the pod unit is enabled)
 5. Runs `systemctl --user daemon-reload`
 6. Builds `api-manager-backend:latest` and `api-manager-frontend:latest`
 7. Creates named volumes (`api-manager-db`, `api-manager-tls`, `api-manager-jwt`, `api-manager-caddy-config`, `api-manager-caddy-data`)
@@ -244,7 +244,7 @@ Build the dev container image and restart the dev unit. Run this after any sourc
 
 **What it does:**
 1. Normalises `.env` (same logic as `install.sh`)
-2. Copies `.quadlet/api-manager-dev.container` to the systemd unit directory
+2. Copies `quadlet/api-manager-dev.container` to the systemd unit directory
 3. Runs `systemctl --user daemon-reload`
 4. Builds `api-manager-dev:latest` from `Containerfile.dev` (`oven/bun:1.2.15`)
 5. Restarts `api-manager-dev.service`
