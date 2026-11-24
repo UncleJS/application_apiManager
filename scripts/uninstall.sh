@@ -59,6 +59,8 @@ if ! systemctl --user show-environment >/dev/null 2>&1; then
 fi
 
 mapfile -t services < <(all_services)
+# Oneshot service of the dev volume unit that older installs wrote.
+services+=("api-manager-dev$SFX-volume.service")
 mapfile -t containers < <(all_containers)
 repo_images=("$IMAGE_BACKEND" "$IMAGE_FRONTEND" "$IMAGE_DEV")
 # Volumes as Quadlet names them (systemd-<name>) and as install.sh creates them,
@@ -126,7 +128,8 @@ if [ "$removed" -gt 0 ]; then green "  removed $removed unlabelled parent layer 
 mapfile -t layers < <(podman images -a -q --filter "label=$IMAGE_LABEL" | sort -u)
 if [ "${#layers[@]}" -gt 0 ]; then
   podman rmi -f "${layers[@]}" >/dev/null 2>&1 || true
-  green "  removed ${#layers[@]} labelled build layer image(s)"
+  still="$(podman images -a -q --filter "label=$IMAGE_LABEL" | sort -u | wc -l)"
+  green "  removed $(( ${#layers[@]} - still )) of ${#layers[@]} labelled build layer image(s)"
 fi
 podman image prune -f --filter "label=$IMAGE_LABEL" >/dev/null 2>&1 || true
 green "  no RUN cache mounts are used, so there is no separate build cache to clear"
@@ -155,6 +158,19 @@ for img in "${BASE_IMAGES[@]}"; do
     yellow "  kept $img: still needed by another image"
   fi
 done
+
+# Rootless podman builds localhost/podman-pause:<ver> for pod infra containers.
+# Remove it only when no pod at all is left (any repo); podman rebuilds it.
+mapfile -t pause_imgs < <(podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost/podman-pause:' || true)
+if [ "${#pause_imgs[@]}" -gt 0 ]; then
+  if [ -n "$(podman pod ls -q)" ]; then
+    yellow "  kept ${pause_imgs[*]}: other pods still exist"
+  else
+    for img in "${pause_imgs[@]}"; do
+      if podman rmi "$img" >/dev/null 2>&1; then green "  removed image $img"; else yellow "  kept $img: still in use"; fi
+    done
+  fi
+fi
 
 # ── networks, secrets, state files ────────────────────────────────────────────
 step "Removing networks, secrets and state files"
@@ -229,6 +245,13 @@ if [ -n "$builders" ]; then yellow "  build containers not owned by a pod (check
 if [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)" = "yes" ]; then
   yellow "  systemd linger is enabled for $USER (install.sh --enable-linger sets it); left as is, other services may need it."
   yellow "  If nothing else does: loginctl disable-linger $USER"
+fi
+# Builds from before build.sh labelled every layer can leave unlabelled
+# build-stage images (<none>) that cannot be tied to this repo safely.
+dangling="$(podman images -a -q --filter dangling=true | sort -u | wc -l)"
+if [ "$dangling" -gt 0 ]; then
+  yellow "  $dangling untagged image(s) without a repo label remain (may include stages of"
+  yellow "  older unlabelled builds, or other repos'); review with: podman images -a --filter dangling=true"
 fi
 kept_base="$(podman images --format '{{.Repository}}:{{.Tag}}' | only "${BASE_IMAGES[@]}" | words)"
 if [ -n "$kept_base" ]; then yellow "  shared base images still present (see above): $kept_base"; fi
