@@ -227,7 +227,8 @@ fi
 builders="$(podman ps -a --external --format '{{.Names}}' | grep -E '(bun|working-container)' | grep -vFx -f <(podman ps -a --format '{{.Names}}') | words || true)"
 if [ -n "$builders" ]; then yellow "  build containers not owned by a pod (check by hand): $builders"; fi
 if [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)" = "yes" ]; then
-  yellow "  systemd linger is still enabled for $USER (install.sh --enable-linger); disable with: loginctl disable-linger $USER"
+  yellow "  systemd linger is enabled for $USER (install.sh --enable-linger sets it); left as is, other services may need it."
+  yellow "  If nothing else does: loginctl disable-linger $USER"
 fi
 kept_base="$(podman images --format '{{.Repository}}:{{.Tag}}' | only "${BASE_IMAGES[@]}" | words)"
 if [ -n "$kept_base" ]; then yellow "  shared base images still present (see above): $kept_base"; fi
