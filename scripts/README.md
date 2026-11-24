@@ -174,7 +174,7 @@ Stops the install and removes everything it created to build and run. Without `J
 3. Removes the images the repo built and their build layers (every layer carries the `app=api-manager[-<slug>]` label; unlabelled parents from older builds are removed too)
 4. Removes the third-party base images (`oven/bun`, `mariadb`, `caddy`, `phpmyadmin`, `busybox`) unless a container or another Quadlet unit still uses them; it says which ones it kept and why. The rootless `localhost/podman-pause` image, if present, is removed only when no pod is left
 5. Removes networks, secrets and state files the scripts created (the repo creates no networks or secrets; `.env` stays in the checkout)
-6. Checks for leftovers filtered to this install's exact names and exits non-zero if anything that should be gone remains. It also points out leftover build containers an enabled linger, and untagged images without a repo label (for example stages of builds made before every layer was labelled), which it does not delete because they cannot be tied to this repo
+6. Checks for leftovers filtered to this install's exact names and exits non-zero if anything that should be gone remains. It also points out leftover build containers, an enabled linger, and untagged images without a repo label (for example stages of builds made before every layer was labelled), which it does not delete because they cannot be tied to this repo
 
 **Kept by default:** named volumes and the Quadlet units in `~/.config/containers/systemd/`, unless the flags below are given. The script lists what it kept.
 
